@@ -45,11 +45,21 @@ The ideal customer:
   - Pays Section 301 tariffs and/or eats long ocean lead times
   - Has a buying committee (VP Ops, Director of Supply Chain, etc.)
 
-You will be given a target profile. Find 8-15 specific US companies matching it.
+You will be given a target profile. Find specific US companies matching it.
 Use web search to verify each candidate. Be conservative — fewer high-quality
 candidates is better than many speculative ones. Reject candidates without a
 clear US presence, without import-from-Asia evidence, or that are too large
-(Fortune 500) or too small (under $5M).`;
+(Fortune 500) or too small (under $5M).
+
+OUTPUT CONTRACT — non-negotiable:
+  - Your FINAL message MUST be a single JSON object matching the schema below,
+    and NOTHING ELSE — no prose before or after.
+  - Even if your searches are inconclusive, output { "candidates": [] }.
+  - Do not narrate plans like "let me search again" in the final message.
+    Plan internally, search, then output JSON.
+  - Budget your tokens: prefer ending early with the JSON over continued
+    reasoning. An empty result with the JSON shape is success; a truncated
+    answer without JSON is failure.`;
 
 function buildUserPrompt(target: DiscoveryTarget, max: number): string {
   return `Target profile:
@@ -100,14 +110,14 @@ export async function runDiscovery(
 
   const msg = await client.messages.create({
     model: CLAUDE_MODELS.research, // sonnet-4-6
-    max_tokens: 4000,
+    max_tokens: 8000,
     temperature: 0.2,
     system: SYSTEM_PROMPT,
     tools: [
       {
         type: 'web_search_20250305' as never,
         name: 'web_search',
-        max_uses: 8,
+        max_uses: 6,
       } as never,
     ],
     messages: [{ role: 'user', content: buildUserPrompt(target, max) }],
@@ -117,10 +127,40 @@ export async function runDiscovery(
   let parsed: { candidates: Candidate[] };
   try {
     parsed = extractJson(text);
-  } catch (e) {
-    throw new Error(
-      `discovery: Claude returned unparseable response (${e instanceof Error ? e.message : e}). First 200 chars: ${text.slice(0, 200)}`,
-    );
+  } catch {
+    // Claude finished without producing valid JSON — usually it ran out of
+    // budget mid-reasoning. Record the run with zero candidates and log
+    // Claude's reasoning so we can see what happened on /discovery.
+    parsed = { candidates: [] };
+    const supabaseSvc = createServiceClient();
+    await supabaseSvc.from('discovery_runs').insert({
+      target_id: target.id,
+      trigger,
+      candidates_returned: 0,
+      companies_created: 0,
+      companies_skipped_dedupe: 0,
+      jobs_enqueued: 0,
+      duration_ms: Date.now() - startedAt,
+      errors: [
+        {
+          kind: 'no_json_returned',
+          stop_reason: msg.stop_reason ?? 'unknown',
+          reasoning_excerpt: text.slice(0, 600),
+        },
+      ] as never,
+      error_message: 'Claude finished without producing JSON (likely budget exhausted during search/reasoning).',
+      created_by: createdBy,
+    } as never);
+
+    return {
+      target_id: target.id,
+      candidates_returned: 0,
+      companies_created: 0,
+      companies_skipped_dedupe: 0,
+      jobs_enqueued: 0,
+      duration_ms: Date.now() - startedAt,
+      errors: ['Claude finished without JSON — saw: ' + text.slice(0, 160)],
+    };
   }
 
   const supabase = createServiceClient();
