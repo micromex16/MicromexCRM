@@ -18,6 +18,8 @@ export async function POST(_request: NextRequest, ctx: { params: { id: string } 
       source: r.source,
       reason: r.reason,
       hint: r.hint,
+      debug: r.debug,
+      errors: r.errors,
     });
   } catch (e) {
     return NextResponse.json(
