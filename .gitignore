@@ -40,3 +40,7 @@ test-results/
 logs
 npm-debug.log*
 pnpm-debug.log*
+
+# claude code local state
+.claude/
+
