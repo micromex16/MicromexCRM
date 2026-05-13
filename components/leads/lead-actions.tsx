@@ -37,33 +37,76 @@ export function LeadActions({ leadId }: { leadId: string }) {
     }
   }
 
+  async function callStep(step: 'research' | 'contacts' | 'score') {
+    const res = await fetch(`/api/leads/${leadId}/enrich/${step}`, { method: 'POST' });
+    let json: Record<string, unknown> = {};
+    try {
+      json = await res.json();
+    } catch {
+      // Vercel returns plain-text "Internal Server Error" on timeout/crash
+      throw new Error(`${step}: server returned non-JSON (likely timeout or crash)`);
+    }
+    if (!res.ok) throw new Error((json.error as string) ?? `${step}: HTTP ${res.status}`);
+    return json;
+  }
+
   async function runEnrich() {
     setEnriching(true);
+    const toastId = toast.loading('Enriching… research + contacts + score');
     try {
-      const res = await fetch(`/api/leads/${leadId}/enrich`, { method: 'POST' });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      const score = (json.results?.score as { fit_score?: number } | undefined)?.fit_score;
-      const contactsAdded = (json.results?.contacts as { added?: number } | undefined)?.added;
-      const summary = [
-        score !== undefined ? `fit ${score}` : null,
-        contactsAdded !== undefined ? `${contactsAdded} contacts` : null,
-        json.failed > 0 ? `${json.failed} step(s) failed` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      if (json.succeeded > 0) {
-        toast.success(`Enrichment complete — ${summary || 'done'}`, {
-          description: json.errors?.length ? json.errors.join('\n') : undefined,
+      // Research and contacts are independent; score depends on research.
+      // Run research + contacts in parallel, then score once research lands.
+      const [researchResult, contactsResult] = await Promise.allSettled([
+        callStep('research'),
+        callStep('contacts'),
+      ]);
+
+      let scoreResult: PromiseSettledResult<Record<string, unknown>> | null = null;
+      if (researchResult.status === 'fulfilled') {
+        scoreResult = await Promise.allSettled([callStep('score')]).then((r) => r[0]);
+      }
+
+      const parts: string[] = [];
+      const errors: string[] = [];
+
+      if (scoreResult?.status === 'fulfilled') {
+        parts.push(`fit ${scoreResult.value.fit_score}`);
+      } else if (researchResult.status === 'fulfilled') {
+        parts.push('research done');
+      } else {
+        errors.push(`research: ${(researchResult as PromiseRejectedResult).reason?.message ?? 'failed'}`);
+      }
+
+      if (contactsResult.status === 'fulfilled') {
+        const added = contactsResult.value.added as number;
+        parts.push(`${added} contacts`);
+        const hint = contactsResult.value.hint as string | undefined;
+        if (added === 0 && hint) errors.push(hint);
+      } else {
+        errors.push(`contacts: ${(contactsResult as PromiseRejectedResult).reason?.message ?? 'failed'}`);
+      }
+
+      if (scoreResult?.status === 'rejected') {
+        errors.push(`score: ${scoreResult.reason?.message ?? 'failed'}`);
+      }
+
+      const success = researchResult.status === 'fulfilled' || contactsResult.status === 'fulfilled';
+      const summary = parts.join(' · ') || 'no progress';
+
+      if (success) {
+        toast.success(`Enrichment — ${summary}`, {
+          id: toastId,
+          description: errors.length ? errors.join('\n') : undefined,
         });
       } else {
         toast.error('Enrichment failed', {
-          description: (json.errors ?? []).join('\n') || 'No steps succeeded.',
+          id: toastId,
+          description: errors.join('\n') || 'All steps failed.',
         });
       }
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Enrichment failed');
+      toast.error(e instanceof Error ? e.message : 'Enrichment failed', { id: toastId });
     } finally {
       setEnriching(false);
     }
