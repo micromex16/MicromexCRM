@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    { "path": "/api/cron/scrape-importyeti", "schedule": "0 */6 * * *" },
+    { "path": "/api/cron/enqueue-enrichment", "schedule": "15 * * * *" },
+    { "path": "/api/cron/run-enrichment", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/score-leads", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/send-batch", "schedule": "*/15 14-22 * * 1-5" },
+    { "path": "/api/cron/digest-daily", "schedule": "0 13 * * 1-5" }
+  ],
+  "functions": {
+    "app/api/cron/run-enrichment/route.ts": { "maxDuration": 300 },
+    "app/api/cron/send-batch/route.ts": { "maxDuration": 300 },
+    "app/api/sources/scrape/route.ts": { "maxDuration": 300 },
+    "app/api/sources/upload/route.ts": { "maxDuration": 60 }
+  }
+}

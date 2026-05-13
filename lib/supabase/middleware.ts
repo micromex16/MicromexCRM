@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { domainFromEmail } from '@/lib/utils';
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/signout'];
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/signout', '/u/'];
 const ALLOWED_DOMAIN = process.env.ALLOWED_EMAIL_DOMAIN ?? 'micromex.com';
 
 export async function updateSession(request: NextRequest) {
