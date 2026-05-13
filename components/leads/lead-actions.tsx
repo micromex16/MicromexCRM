@@ -41,13 +41,29 @@ export function LeadActions({ leadId }: { leadId: string }) {
     setEnriching(true);
     try {
       const res = await fetch(`/api/leads/${leadId}/enrich`, { method: 'POST' });
-      if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
-      toast.success('Enrichment jobs queued', {
-        description: 'research + score will run on the next cron tick.',
-      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const score = (json.results?.score as { fit_score?: number } | undefined)?.fit_score;
+      const contactsAdded = (json.results?.contacts as { added?: number } | undefined)?.added;
+      const summary = [
+        score !== undefined ? `fit ${score}` : null,
+        contactsAdded !== undefined ? `${contactsAdded} contacts` : null,
+        json.failed > 0 ? `${json.failed} step(s) failed` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      if (json.succeeded > 0) {
+        toast.success(`Enrichment complete — ${summary || 'done'}`, {
+          description: json.errors?.length ? json.errors.join('\n') : undefined,
+        });
+      } else {
+        toast.error('Enrichment failed', {
+          description: (json.errors ?? []).join('\n') || 'No steps succeeded.',
+        });
+      }
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to queue enrichment');
+      toast.error(e instanceof Error ? e.message : 'Enrichment failed');
     } finally {
       setEnriching(false);
     }
