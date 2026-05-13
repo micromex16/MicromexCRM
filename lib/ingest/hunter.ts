@@ -21,7 +21,10 @@ export async function searchHunterByDomain(domain: string): Promise<NormalizedCo
     throw new Error('HUNTER_API_KEY not set');
   }
 
-  const url = `${HUNTER_BASE}/domain-search?domain=${encodeURIComponent(domain)}&limit=25&api_key=${key}`;
+  // Hunter free tier caps results at 10/request and returns HTTP 400 if you
+  // ask for more. Stay at 10 — paid plans don't suffer from this, and 10
+  // is more than enough for an initial outreach contact list per company.
+  const url = `${HUNTER_BASE}/domain-search?domain=${encodeURIComponent(domain)}&limit=10&api_key=${encodeURIComponent(key)}`;
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text();
