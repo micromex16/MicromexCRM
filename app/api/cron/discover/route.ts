@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       continue;
     }
     try {
-      const r = await runDiscovery(target, { maxCandidates: 5, trigger: 'cron' });
+      const r = await runDiscovery(target, { maxCandidates: 12, trigger: 'cron' });
       results.push(r);
     } catch (e) {
       results.push({

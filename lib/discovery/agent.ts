@@ -35,74 +35,80 @@ export interface DiscoveryOptions {
   createdBy?: string | null;
 }
 
-const SYSTEM_PROMPT = `You are a sourcing analyst for Micromex, a US-Mexico contract manufacturer
-(USMCA, Tucson HQ, Imuris Sonora factory, est. 1988). Your job is to identify
-US brands that would benefit from moving Asian sub-assembly work to Micromex.
+const SYSTEM_PROMPT = `You are a lead-generation agent for Micromex, a US-Mexico contract
+manufacturer (USMCA, Tucson HQ, Imuris Sonora factory, est. 1988). Your job
+is volume + breadth: surface as many plausible US-facing brands as possible
+in the target category. Downstream workers (research, scoring) will verify
+import origins, revenue, and decision-makers — that is NOT your job.
 
-The ideal customer:
-  - US company, $5M-$500M revenue
-  - Imports finished goods or sub-components from China / Vietnam / Taiwan
-  - Pays Section 301 tariffs and/or eats long ocean lead times
-  - Has a buying committee (VP Ops, Director of Supply Chain, etc.)
+Cast a wide net:
+  - Include any US-facing brand selling products in the category. "US-facing"
+    means they sell into the US market — HQ can be anywhere.
+  - Brands you've heard of from training data ARE fair game; web search is
+    a sanity check, not a hard requirement.
+  - Don't try to verify revenue or import origins yourself. Just include a
+    rough guess. The downstream research worker does the deep verification.
+  - Skip ONLY: Fortune 500 giants (way too big to swap suppliers), pure
+    distributors with no product line, and clearly defunct brands.
+  - Confidence < 0.5 is fine — downstream scoring will filter.
 
-You will be given a target profile. Find specific US companies matching it.
-Use web search to verify each candidate. Be conservative — fewer high-quality
-candidates is better than many speculative ones. Reject candidates without a
-clear US presence, without import-from-Asia evidence, or that are too large
-(Fortune 500) or too small (under $5M).
+Use web search efficiently:
+  - 1-3 searches per request is plenty. Prefer LIST queries that return
+    many brands at once: "best <category> brands 2024 USA", "top DTC <category>
+    startups", "<category> companies on Amazon".
+  - You don't need to verify every candidate with its own search. Pull names
+    from listicles, "best of" articles, Amazon best-sellers, Crunchbase
+    industry pages.
 
 OUTPUT CONTRACT — non-negotiable:
-  - Your FINAL message MUST be a single JSON object matching the schema below,
-    and NOTHING ELSE — no prose before or after.
-  - Even if your searches are inconclusive, output { "candidates": [] }.
-  - Do not narrate plans like "let me search again" in the final message.
-    Plan internally, search, then output JSON.
-  - Budget your tokens: prefer ending early with the JSON over continued
-    reasoning. An empty result with the JSON shape is success; a truncated
-    answer without JSON is failure.`;
+  - Your FINAL message MUST be a single JSON object and NOTHING ELSE.
+  - Aim for 12-20 candidates per request. Empty is failure, not caution.
+  - Plan internally; do NOT narrate your search plan in the final message.
+  - Budget tokens favoring the JSON output. Don't keep searching forever.`;
 
 function buildUserPrompt(target: DiscoveryTarget, max: number): string {
-  return `Target profile:
-  Industry: ${target.industry_segment}
-  Capability fit: ${target.capability}
-  Revenue band: ${target.revenue_band}
-  Likely import origins: ${target.import_origins.join(', ')}
-  Product signals to look for: ${target.product_signals.join(', ')}
-  Specific examples of what to search: ${target.search_hints.join(' / ')}
+  return `Category: ${target.industry_segment}
+Capability fit (for Micromex): ${target.capability}
+Approximate revenue band of interest: ${target.revenue_band}
+Product signals: ${target.product_signals.join(', ')}
+Useful search starting points: ${target.search_hints.join(' / ')}
 
 Description: ${target.description}
 
-Search the web for ${max} US companies matching this profile. For each, verify:
-  - They have a real US-facing product line (look at their website)
-  - They import from China / Vietnam / Taiwan (look for "made in", supplier disclosures, sustainability reports, FOB origin in shipping docs, Amazon listings, press releases)
-  - Revenue band roughly fits ${target.revenue_band}
+Produce a list of up to ${max} US-facing brands in this category. Pull from
+"best of" lists, Amazon best-sellers, DTC startup roundups, industry
+directories — whatever surfaces a lot of names quickly. Include both
+well-known brands and smaller DTC names.
 
-Output strict JSON only (no prose before or after):
+Do NOT try to verify each company's import origin or exact revenue — guess
+based on category norms (e.g. "premium small appliances" → likely from
+China/Italy → just put "China" as likely origin). The research worker
+downstream will do the real verification.
+
+Output strict JSON only (no prose before or after, no markdown fence):
 {
   "candidates": [
     {
-      "name": "<exact legal/brand name>",
-      "domain": "<their primary domain, no protocol, no www>",
-      "website": "<full https URL>",
+      "name": "<brand name>",
+      "domain": "<primary domain, no protocol, no www, your best guess if uncertain>",
+      "website": "<full https URL or null>",
       "country": "US",
       "industry_segment": "${target.industry_segment}",
-      "revenue_band_estimate": "<e.g. $10M-$50M>",
-      "import_origin_likely": "<China|Vietnam|Taiwan|...>",
-      "import_evidence": "<one sentence citing source: 'Amazon listing shows Shenzhen importer', 'LinkedIn lists factory in Dongguan', etc>",
-      "why_fit": "<one sentence: what Micromex capability fits and why now>",
-      "confidence": <0.0-1.0, your honest confidence>
+      "revenue_band_estimate": "<rough guess, e.g. $10M-$50M>",
+      "import_origin_likely": "<best guess: China / Vietnam / Taiwan / Italy / Mexico>",
+      "import_evidence": "<\"likely based on category norms\" if you don't have direct evidence>",
+      "why_fit": "<one short sentence: what Micromex capability fits>",
+      "confidence": <0.0-1.0>
     }
   ]
-}
-
-If you cannot find good candidates, return an empty array. Do not fabricate.`;
+}`;
 }
 
 export async function runDiscovery(
   target: DiscoveryTarget,
   options: DiscoveryOptions = {},
 ): Promise<DiscoveryResult> {
-  const max = options.maxCandidates ?? 10;
+  const max = options.maxCandidates ?? 15;
   const trigger = options.trigger ?? 'manual';
   const createdBy = options.createdBy ?? null;
   const startedAt = Date.now();
