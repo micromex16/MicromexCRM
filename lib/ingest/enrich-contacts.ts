@@ -15,6 +15,18 @@ export interface EnrichContactsResult {
   reason: EnrichContactsReason;
   hint?: string;
   errors?: string[];
+  /** Diagnostic info — populated so we can debug "0 contacts" mysteries. */
+  debug?: {
+    domain: string | null;
+    keys: { apollo: boolean; hunter: boolean };
+    candidates_from_provider: number;
+    skipped_no_email_or_name: number;
+    skipped_dedupe: number;
+    insert_attempts: number;
+    inserts_ok: number;
+    inserts_failed: number;
+    first_insert_error?: string;
+  };
 }
 
 /**
@@ -92,13 +104,26 @@ export async function enrichContacts(companyId: string): Promise<EnrichContactsR
     }
   }
 
+  const debug = {
+    domain,
+    keys: { apollo: hasApollo, hunter: hasHunter },
+    candidates_from_provider: people.length,
+    skipped_no_email_or_name: 0,
+    skipped_dedupe: 0,
+    insert_attempts: 0,
+    inserts_ok: 0,
+    inserts_failed: 0,
+    first_insert_error: undefined as string | undefined,
+  };
+
   if (people.length === 0) {
     return {
       count: 0,
       source: usedSource,
       reason: 'no_results',
-      hint: `Tried ${[hasApollo && 'Apollo', hasHunter && 'Hunter'].filter(Boolean).join(' + ')} on ${domain} — no people returned. The company may be too small, too private, or the domain may be off.`,
+      hint: `Tried ${[hasApollo && 'Apollo', hasHunter && 'Hunter'].filter(Boolean).join(' + ')} on ${domain} — provider returned 0 emails.`,
       errors: errors.length ? errors : undefined,
+      debug,
     };
   }
 
@@ -121,12 +146,17 @@ export async function enrichContacts(companyId: string): Promise<EnrichContactsR
 
   let count = 0;
   for (const p of people) {
-    if (!p.email && !p.first_name) continue;
+    if (!p.email && !p.first_name) {
+      debug.skipped_no_email_or_name++;
+      continue;
+    }
     const lower = p.email?.toLowerCase();
     if (lower && existingEmails.has(lower)) {
-      continue; // already in DB
+      debug.skipped_dedupe++;
+      continue;
     }
-    const { error: insErr } = await supabase.from('contacts').insert({
+    debug.insert_attempts++;
+    const payload = {
       company_id: companyId,
       first_name: p.first_name,
       last_name: p.last_name,
@@ -135,16 +165,19 @@ export async function enrichContacts(companyId: string): Promise<EnrichContactsR
       email_verified: p.email_verified,
       phone: p.phone,
       linkedin_url: p.linkedin_url,
-      seniority: p.seniority as never,
+      seniority: p.seniority,
       role_match_score: p.role_match_score,
       is_primary: p === top,
       source: p.source,
-    } as never);
+    };
+    const { error: insErr } = await supabase.from('contacts').insert(payload as never);
     if (insErr) {
-      // Real failure — log so the caller can surface it
+      debug.inserts_failed++;
+      if (!debug.first_insert_error) debug.first_insert_error = insErr.message;
       errors.push(`insert ${p.email ?? p.first_name}: ${insErr.message}`);
-      console.warn(`contact insert failed:`, insErr.message);
+      console.warn(`contact insert failed:`, insErr.message, 'payload:', JSON.stringify(payload));
     } else {
+      debug.inserts_ok++;
       count++;
       if (lower) existingEmails.add(lower);
     }
@@ -157,9 +190,10 @@ export async function enrichContacts(companyId: string): Promise<EnrichContactsR
     hint:
       count === 0
         ? errors.length
-          ? `Insert errors prevented saving contacts — first: ${errors[0]}`
-          : `${people.length} candidates returned but all duplicates already in DB.`
+          ? `${debug.inserts_failed} insert(s) failed. First error: ${debug.first_insert_error}`
+          : `${people.length} candidates returned but ${debug.skipped_dedupe} were duplicates already in DB.`
         : undefined,
     errors: errors.length ? errors : undefined,
+    debug,
   };
 }

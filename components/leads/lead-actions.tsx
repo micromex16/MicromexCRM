@@ -81,7 +81,11 @@ export function LeadActions({ leadId }: { leadId: string }) {
         const added = contactsResult.value.added as number;
         parts.push(`${added} contacts`);
         const hint = contactsResult.value.hint as string | undefined;
+        const debug = contactsResult.value.debug as Record<string, unknown> | undefined;
         if (added === 0 && hint) errors.push(hint);
+        if (added === 0 && debug) {
+          errors.push(`debug: ${JSON.stringify(debug)}`);
+        }
       } else {
         errors.push(`contacts: ${(contactsResult as PromiseRejectedResult).reason?.message ?? 'failed'}`);
       }
