@@ -113,7 +113,7 @@ export function BulkEnrichButton() {
       size="sm"
       onClick={start}
       disabled={running}
-      title="Runs research + contact lookup + scoring on every lead that hasn't been enriched yet. Costs ~$0.10–$0.20 in Anthropic + 1 Hunter credit per lead."
+      title="Runs research + contact lookup + scoring on every lead that hasn't been enriched yet. Costs ~$0.03 in Anthropic + 1 Hunter credit per lead."
     >
       {running ? (
         <>
