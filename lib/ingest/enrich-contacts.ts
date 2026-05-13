@@ -2,48 +2,104 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { searchApolloByDomain } from '@/lib/ingest/apollo';
 import { searchHunterByDomain } from '@/lib/ingest/hunter';
 
+export type EnrichContactsReason =
+  | 'ok'
+  | 'no_domain'
+  | 'no_keys'
+  | 'no_results'
+  | 'company_not_found';
+
+export interface EnrichContactsResult {
+  count: number;
+  source: string | null;
+  reason: EnrichContactsReason;
+  hint?: string;
+  errors?: string[];
+}
+
 /**
  * Look up contacts for a company. Tries Apollo first, falls back to Hunter.
- * Upserts into `contacts`, sets `is_primary` on the best match (highest role_match_score).
- * Returns the count of contacts inserted/updated.
+ * Upserts into `contacts`, sets `is_primary` on the best match.
+ *
+ * Always returns a structured reason so the UI can explain WHY contacts
+ * may not have been added (no keys, no domain, no results).
  */
-export async function enrichContacts(companyId: string): Promise<{ count: number; source: string | null }> {
+export async function enrichContacts(companyId: string): Promise<EnrichContactsResult> {
   const supabase = createServiceClient();
   const { data: company, error } = await supabase
     .from('companies')
     .select('id, name, domain')
     .eq('id', companyId)
     .single();
-  if (error || !company) throw new Error(`enrichContacts: company ${companyId} not found`);
+  if (error || !company) {
+    return {
+      count: 0,
+      source: null,
+      reason: 'company_not_found',
+      hint: `Company ${companyId} not found.`,
+    };
+  }
 
   const domain = (company as { domain: string | null }).domain;
   if (!domain) {
-    return { count: 0, source: null };
+    return {
+      count: 0,
+      source: null,
+      reason: 'no_domain',
+      hint:
+        'No domain on file for this company — Apollo/Hunter both look up by domain. ' +
+        'Edit the lead and add a domain, then re-run enrichment.',
+    };
+  }
+
+  const hasApollo = Boolean(process.env.APOLLO_API_KEY);
+  const hasHunter = Boolean(process.env.HUNTER_API_KEY);
+  if (!hasApollo && !hasHunter) {
+    return {
+      count: 0,
+      source: null,
+      reason: 'no_keys',
+      hint:
+        'Neither APOLLO_API_KEY nor HUNTER_API_KEY is set in Vercel. ' +
+        'Get one from https://apollo.io (recommended) or https://hunter.io and add it under ' +
+        'Vercel → Project → Settings → Environment Variables, then redeploy.',
+    };
   }
 
   let people: Awaited<ReturnType<typeof searchApolloByDomain>> = [];
   let usedSource: string | null = null;
+  const errors: string[] = [];
 
-  if (process.env.APOLLO_API_KEY) {
+  if (hasApollo) {
     try {
       people = await searchApolloByDomain(domain);
       usedSource = 'apollo';
     } catch (e) {
-      console.warn(`Apollo failed for ${domain}:`, e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      errors.push(`Apollo: ${msg}`);
+      console.warn(`Apollo failed for ${domain}:`, msg);
     }
   }
 
-  if (people.length === 0 && process.env.HUNTER_API_KEY) {
+  if (people.length === 0 && hasHunter) {
     try {
       people = await searchHunterByDomain(domain);
       usedSource = 'hunter';
     } catch (e) {
-      console.warn(`Hunter failed for ${domain}:`, e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      errors.push(`Hunter: ${msg}`);
+      console.warn(`Hunter failed for ${domain}:`, msg);
     }
   }
 
   if (people.length === 0) {
-    return { count: 0, source: usedSource };
+    return {
+      count: 0,
+      source: usedSource,
+      reason: 'no_results',
+      hint: `Tried ${[hasApollo && 'Apollo', hasHunter && 'Hunter'].filter(Boolean).join(' + ')} on ${domain} — no people returned. The company may be too small, too private, or the domain may be off.`,
+      errors: errors.length ? errors : undefined,
+    };
   }
 
   // Sort by role match score; the top one is primary.
@@ -75,5 +131,10 @@ export async function enrichContacts(companyId: string): Promise<{ count: number
     if (!insErr) count++;
   }
 
-  return { count, source: usedSource };
+  return {
+    count,
+    source: usedSource,
+    reason: 'ok',
+    errors: errors.length ? errors : undefined,
+  };
 }

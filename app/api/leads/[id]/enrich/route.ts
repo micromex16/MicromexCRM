@@ -35,7 +35,15 @@ export async function POST(_request: NextRequest, ctx: { params: { id: string } 
   // 2. Contact lookup (best-effort; needs APOLLO/HUNTER key to do anything real)
   try {
     const r = await enrichContacts(id);
-    results.contacts = { added: r.count, source: r.source };
+    results.contacts = {
+      added: r.count,
+      source: r.source,
+      reason: r.reason,
+      hint: r.hint,
+    };
+    if (r.reason !== 'ok' && r.count === 0) {
+      errors.push(`contacts: ${r.hint ?? r.reason}`);
+    }
   } catch (e) {
     errors.push(`email_lookup: ${e instanceof Error ? e.message : String(e)}`);
   }
