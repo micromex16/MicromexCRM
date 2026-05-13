@@ -10,6 +10,7 @@ export interface Candidate {
   domain: string | null;
   website: string | null;
   country: string;
+  us_presence_note?: string;
   industry_segment: string;
   revenue_band_estimate: string;
   import_origin_likely: string;
@@ -41,15 +42,22 @@ is volume + breadth: surface as many plausible US-facing brands as possible
 in the target category. Downstream workers (research, scoring) will verify
 import origins, revenue, and decision-makers — that is NOT your job.
 
-Cast a wide net:
-  - Include any US-facing brand selling products in the category. "US-facing"
-    means they sell into the US market — HQ can be anywhere.
+Cast a wide net (within the location filter):
+  - REQUIRED: the brand must have a US headquarters OR substantial US
+    offices / operations / warehousing. Foreign ownership is fine — an
+    Italian-owned brand with a Boston office qualifies; a Chinese brand
+    that only sells via Amazon FBA with no US presence does NOT.
+    "Substantial US presence" = real address, real US employees, not
+    just a virtual office or PO box.
+  - Within that location filter, include any brand in the category.
+    Well-known names + smaller DTC names + B2B brands all welcome.
   - Brands you've heard of from training data ARE fair game; web search is
     a sanity check, not a hard requirement.
   - Don't try to verify revenue or import origins yourself. Just include a
     rough guess. The downstream research worker does the deep verification.
   - Skip ONLY: Fortune 500 giants (way too big to swap suppliers), pure
-    distributors with no product line, and clearly defunct brands.
+    distributors with no product line, clearly defunct brands, and brands
+    with NO US presence at all (foreign-only operations).
   - Confidence < 0.5 is fine — downstream scoring will filter.
 
 Use web search efficiently:
@@ -75,10 +83,15 @@ Useful search starting points: ${target.search_hints.join(' / ')}
 
 Description: ${target.description}
 
-Produce a list of up to ${max} US-facing brands in this category. Pull from
-"best of" lists, Amazon best-sellers, DTC startup roundups, industry
-directories — whatever surfaces a lot of names quickly. Include both
-well-known brands and smaller DTC names.
+Produce a list of up to ${max} brands in this category that have a US
+headquarters or substantial US offices/operations. Foreign ownership is
+OK; foreign-only operations are NOT (e.g. Amazon-only foreign sellers
+with no US presence don't qualify).
+
+Pull from "best of" lists, Amazon best-sellers (US brands only), DTC
+startup roundups, industry directories, US-based trade associations —
+whatever surfaces a lot of names quickly. Include both well-known brands
+and smaller DTC names.
 
 Do NOT try to verify each company's import origin or exact revenue — guess
 based on category norms (e.g. "premium small appliances" → likely from
@@ -93,6 +106,7 @@ Output strict JSON only (no prose before or after, no markdown fence):
       "domain": "<primary domain, no protocol, no www, your best guess if uncertain>",
       "website": "<full https URL or null>",
       "country": "US",
+      "us_presence_note": "<short note: where their US HQ/offices are. e.g. \"HQ Boston, MA\" or \"US offices in Austin\". Required.>",
       "industry_segment": "${target.industry_segment}",
       "revenue_band_estimate": "<rough guess, e.g. $10M-$50M>",
       "import_origin_likely": "<best guess: China / Vietnam / Taiwan / Italy / Mexico>",
@@ -239,11 +253,12 @@ export async function runDiscovery(
     result.companies_created++;
 
     // Initial discovery activity entry so we can audit what Claude said.
+    const presenceLine = c.us_presence_note ? ` US presence: ${c.us_presence_note}.` : '';
     await supabase.from('activities').insert({
       company_id: companyId,
       type: 'research_update',
       actor: 'discovery_agent',
-      body: `Discovered via target "${target.id}". ${c.why_fit}`,
+      body: `Discovered via target "${target.id}".${presenceLine} ${c.why_fit}`,
       metadata_json: {
         target_id: target.id,
         candidate: c,
