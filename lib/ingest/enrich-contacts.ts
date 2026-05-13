@@ -106,35 +106,60 @@ export async function enrichContacts(companyId: string): Promise<EnrichContactsR
   people.sort((a, b) => b.role_match_score - a.role_match_score);
   const top = people[0];
 
+  // Pre-fetch existing contacts for this company so we can dedupe by lowercase
+  // email locally — the unique index is on (company_id, lower(email)), which
+  // can't be used as an upsert onConflict target directly.
+  const { data: existingRows } = await supabase
+    .from('contacts')
+    .select('id, email')
+    .eq('company_id', companyId);
+  const existingEmails = new Set(
+    ((existingRows ?? []) as { email: string | null }[])
+      .map((r) => r.email?.toLowerCase())
+      .filter((x): x is string => Boolean(x)),
+  );
+
   let count = 0;
   for (const p of people) {
     if (!p.email && !p.first_name) continue;
-    const { error: insErr } = await supabase
-      .from('contacts')
-      .upsert(
-        {
-          company_id: companyId,
-          first_name: p.first_name,
-          last_name: p.last_name,
-          title: p.title,
-          email: p.email,
-          email_verified: p.email_verified,
-          phone: p.phone,
-          linkedin_url: p.linkedin_url,
-          seniority: p.seniority as never,
-          role_match_score: p.role_match_score,
-          is_primary: p === top,
-          source: p.source,
-        } as never,
-        { onConflict: 'company_id,email', ignoreDuplicates: false },
-      );
-    if (!insErr) count++;
+    const lower = p.email?.toLowerCase();
+    if (lower && existingEmails.has(lower)) {
+      continue; // already in DB
+    }
+    const { error: insErr } = await supabase.from('contacts').insert({
+      company_id: companyId,
+      first_name: p.first_name,
+      last_name: p.last_name,
+      title: p.title,
+      email: p.email,
+      email_verified: p.email_verified,
+      phone: p.phone,
+      linkedin_url: p.linkedin_url,
+      seniority: p.seniority as never,
+      role_match_score: p.role_match_score,
+      is_primary: p === top,
+      source: p.source,
+    } as never);
+    if (insErr) {
+      // Real failure — log so the caller can surface it
+      errors.push(`insert ${p.email ?? p.first_name}: ${insErr.message}`);
+      console.warn(`contact insert failed:`, insErr.message);
+    } else {
+      count++;
+      if (lower) existingEmails.add(lower);
+    }
   }
 
   return {
     count,
     source: usedSource,
-    reason: 'ok',
+    reason: count === 0 ? 'no_results' : 'ok',
+    hint:
+      count === 0
+        ? errors.length
+          ? `Insert errors prevented saving contacts — first: ${errors[0]}`
+          : `${people.length} candidates returned but all duplicates already in DB.`
+        : undefined,
     errors: errors.length ? errors : undefined,
   };
 }
