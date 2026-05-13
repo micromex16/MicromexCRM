@@ -147,6 +147,212 @@ export const DISCOVERY_TARGETS: DiscoveryTarget[] = [
     ],
     product_signals: ['cable assembly', 'sub-assembly', 'patient interface', 'medical control'],
   },
+
+  // ===== New specific sectors =====
+  {
+    id: 'automotive_aftermarket_electronics',
+    capability: 'electrical',
+    industry_segment: 'Automotive aftermarket electronics',
+    description:
+      'US automotive aftermarket brands selling dashcams, head units, ECU tuners, lighting, trailer wiring, off-road accessories, EV retrofit kits.',
+    import_origins: ['China', 'Taiwan'],
+    revenue_band: '$5M-$200M',
+    search_hints: [
+      'US automotive aftermarket brand',
+      'truck accessory brand DTC',
+      'overlanding accessory brand',
+      'dashcam brand US',
+      'aftermarket auto electronics startup',
+    ],
+    product_signals: ['dashcam', 'head unit', 'wiring harness', 'overlanding', 'trailer wiring', 'aftermarket lighting'],
+  },
+  {
+    id: 'audio_equipment',
+    capability: 'electrical',
+    industry_segment: 'Audio equipment & pro audio',
+    description:
+      'US audio brands — speakers, headphones, amplifiers, microphones, audio interfaces, studio gear. DTC + B2B.',
+    import_origins: ['China', 'Vietnam', 'Taiwan'],
+    revenue_band: '$5M-$200M',
+    search_hints: [
+      'US audio equipment brand',
+      'DTC speaker company',
+      'pro audio gear startup',
+      'US headphone brand',
+      'studio microphone manufacturer USA',
+    ],
+    product_signals: ['speaker', 'headphone', 'microphone', 'amplifier', 'audio interface', 'pro audio'],
+  },
+  {
+    id: 'smart_home_security',
+    capability: 'electrical',
+    industry_segment: 'Smart home & security',
+    description:
+      'US smart home brands — security cameras, video doorbells, sensors, hubs, smart lighting, smart locks.',
+    import_origins: ['China', 'Vietnam'],
+    revenue_band: '$5M-$300M',
+    search_hints: [
+      'US smart home brand',
+      'US security camera startup',
+      'smart lock manufacturer USA',
+      'video doorbell brand DTC',
+    ],
+    product_signals: ['security camera', 'video doorbell', 'smart sensor', 'smart hub', 'smart lock'],
+  },
+  {
+    id: 'power_tools',
+    capability: 'electrical',
+    industry_segment: 'Power tools & cordless equipment',
+    description:
+      'US power-tool brands — cordless drills, saws, grinders, sanders, outdoor power equipment. Mid-market between DIY and pro.',
+    import_origins: ['China', 'Vietnam'],
+    revenue_band: '$10M-$300M',
+    search_hints: [
+      'US power tool brand',
+      'cordless tool startup USA',
+      'specialty power tool manufacturer',
+      'outdoor power equipment brand DTC',
+    ],
+    product_signals: ['cordless drill', 'circular saw', 'angle grinder', 'leaf blower', 'string trimmer'],
+  },
+  {
+    id: 'pet_products',
+    capability: 'packaging',
+    industry_segment: 'Pet products & accessories',
+    description:
+      'US pet brands — toys, beds, accessories, training gear, subscription boxes. Heavy kitting + retail packaging volume.',
+    import_origins: ['China', 'Vietnam'],
+    revenue_band: '$5M-$200M',
+    search_hints: [
+      'US pet brand DTC',
+      'pet subscription box',
+      'dog toy brand',
+      'cat product startup USA',
+      'pet accessories brand',
+    ],
+    product_signals: ['pet toy', 'pet bed', 'pet accessory', 'training collar', 'subscription kit'],
+  },
+  {
+    id: 'fitness_equipment',
+    capability: 'refurb',
+    industry_segment: 'Home fitness equipment',
+    description:
+      'US home-fitness brands — treadmills, bikes, ellipticals, rowers, strength systems. High return rate makes refurb-as-a-service attractive.',
+    import_origins: ['China', 'Taiwan'],
+    revenue_band: '$10M-$500M',
+    search_hints: [
+      'US home fitness equipment brand',
+      'connected fitness startup',
+      'home treadmill brand',
+      'rowing machine brand USA',
+      'strength training equipment DTC',
+    ],
+    product_signals: ['treadmill', 'exercise bike', 'rowing machine', 'connected fitness', 'home gym'],
+  },
+  {
+    id: 'outdoor_camping_gear',
+    capability: 'packaging',
+    industry_segment: 'Outdoor & camping gear',
+    description:
+      'US outdoor brands — tents, coolers, camp stoves, sleeping bags, headlamps, hydration. Heavy retail packaging + kitting volume.',
+    import_origins: ['China', 'Vietnam', 'Taiwan'],
+    revenue_band: '$5M-$300M',
+    search_hints: [
+      'US outdoor gear brand DTC',
+      'specialty camping equipment manufacturer',
+      'US tent brand',
+      'cooler brand DTC',
+      'overlanding gear brand',
+    ],
+    product_signals: ['tent', 'cooler', 'camp stove', 'sleeping bag', 'headlamp', 'water bottle'],
+  },
+  {
+    id: 'bicycle_parts',
+    capability: 'mechanical',
+    industry_segment: 'Bicycle parts & accessories',
+    description:
+      'US bicycle parts and accessory brands — components, racks, lights, locks, helmets, kits. Mechanical sub-assemblies + packaging.',
+    import_origins: ['China', 'Taiwan'],
+    revenue_band: '$5M-$200M',
+    search_hints: [
+      'US bicycle component brand',
+      'cycling accessory startup',
+      'bike rack manufacturer USA',
+      'bike light brand DTC',
+      'cycling parts US brand',
+    ],
+    product_signals: ['bike component', 'bike rack', 'bike light', 'bike lock', 'cycling helmet'],
+  },
+
+  // ===== Broad-sweep targets (no narrow industry — high-volume catch-all) =====
+  {
+    id: 'broad_electrical',
+    capability: 'electrical',
+    industry_segment: 'US electrical sub-assembly importers (broad)',
+    description:
+      'ANY US brand importing electrical / electronic sub-assemblies, wire harnesses, cord sets, magnetics, control panels, PCBAs from Asia. Cast the widest possible net.',
+    import_origins: ['China', 'Vietnam', 'Taiwan'],
+    revenue_band: '$5M-$300M',
+    search_hints: [
+      'US brands importing electronics from China',
+      'US electronics startup direct-to-consumer',
+      'best US made electronics brands',
+      'US OEM importing wire harnesses',
+      'top US electrical product startups',
+    ],
+    product_signals: ['wire harness', 'cord set', 'transformer', 'power supply', 'control panel', 'PCBA', 'cable assembly'],
+  },
+  {
+    id: 'broad_refurb',
+    capability: 'refurb',
+    industry_segment: 'US premium hardware brands w/ returns (broad)',
+    description:
+      'ANY US premium consumer-hardware brand with non-trivial return volume — espresso, coffee, kitchen, fitness, audio, beauty tech, gaming, smart-home. Refurb-as-a-service candidates.',
+    import_origins: ['China', 'Vietnam', 'Italy', 'Mexico'],
+    revenue_band: '$5M-$300M',
+    search_hints: [
+      'premium US consumer electronics brand',
+      'DTC kitchen appliance brand US',
+      'connected hardware startup',
+      'home appliance brand $200+ price point',
+      'premium small appliance US brand',
+    ],
+    product_signals: ['premium appliance', 'connected device', 'kitchen gadget', 'beauty device', 'high-end consumer hardware'],
+  },
+  {
+    id: 'broad_packaging',
+    capability: 'packaging',
+    industry_segment: 'US CPG + retail packaging clients (broad)',
+    description:
+      'ANY US brand importing bulk product from Asia and needing kitting / hand-pack / retail-ready conversion. Toys, novelty CPG, beauty, pet, outdoor, gift kits, subscription boxes, multi-component sets.',
+    import_origins: ['China', 'Vietnam'],
+    revenue_band: '$5M-$200M',
+    search_hints: [
+      'US CPG brand importing from China',
+      'subscription box company US',
+      'novelty CPG brand DTC',
+      'kit assembler US',
+      'retail-ready packaging client',
+    ],
+    product_signals: ['retail kit', 'multi-pack', 'subscription box', 'hand-pack', 'novelty CPG', 'gift set'],
+  },
+  {
+    id: 'broad_mechanical',
+    capability: 'mechanical',
+    industry_segment: 'US mechanical sub-assembly importers (broad)',
+    description:
+      'ANY US brand importing labor-heavy mechanical sub-assemblies from Asia — hardware kits, hinges, sheaves, brackets, casters, fasteners, machined parts, fixtures. Cross-industry.',
+    import_origins: ['China', 'Taiwan'],
+    revenue_band: '$10M-$300M',
+    search_hints: [
+      'US OEM importing hardware kits from China',
+      'US brand importing sheet metal assemblies',
+      'mechanical sub-assembly buyer US',
+      'US manufacturer outsourcing hardware to Asia',
+      'specialty mechanical hardware US brand',
+    ],
+    product_signals: ['hardware kit', 'sheet metal', 'machined parts', 'bracket', 'hinge', 'caster', 'fixture'],
+  },
 ];
 
 /**
