@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -11,29 +11,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 
 function LoginForm() {
+  const router = useRouter();
   const params = useSearchParams();
   const errorParam = params.get('error');
+  const next = params.get('next') ?? '/';
   const [email, setEmail] = useState('');
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSending(true);
+    setSubmitting(true);
     try {
       const supabase = createClient();
-      const next = params.get('next') ?? '/';
-      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: redirectTo },
-      });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      setSent(true);
+      router.push(next);
+      router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send magic link');
+      toast.error(err instanceof Error ? err.message : 'Sign-in failed');
     } finally {
-      setSending(false);
+      setSubmitting(false);
     }
   }
 
@@ -44,9 +42,7 @@ function LoginForm() {
           <Image src="/micromex-logo.svg" alt="Micromex" width={200} height={48} priority />
         </div>
         <CardTitle className="text-center text-xl">Sign in</CardTitle>
-        <CardDescription className="text-center">
-          Micromex employees only. We&apos;ll email you a magic link.
-        </CardDescription>
+        <CardDescription className="text-center">Micromex employees only.</CardDescription>
       </CardHeader>
       <CardContent>
         {errorParam === 'domain' && (
@@ -54,30 +50,37 @@ function LoginForm() {
             That email isn&apos;t on the @micromex.com domain. Use your work email.
           </div>
         )}
-        {sent ? (
-          <div className="rounded-md border border-mx-200 bg-mx-50 p-4 text-sm text-mx-800">
-            Check <strong>{email}</strong> for your sign-in link.
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Work email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@micromex.com"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={submitting}
+            />
           </div>
-        ) : (
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Work email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@micromex.com"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={sending}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={sending}>
-              {sending ? 'Sending…' : 'Email magic link'}
-            </Button>
-          </form>
-        )}
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+          <Button type="submit" className="w-full" disabled={submitting}>
+            {submitting ? 'Signing in…' : 'Sign in'}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );
