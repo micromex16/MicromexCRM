@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrapeForm } from '@/components/sources/scrape-form';
 import { CsvUpload } from '@/components/sources/csv-upload';
+import { DiscoveryForm } from '@/components/sources/discovery-form';
 import { createClient } from '@/lib/supabase/server';
+import { DISCOVERY_TARGETS } from '@/lib/discovery/targets';
 import { formatDistanceToNow } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +44,15 @@ export default async function SourcesPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
+          <DiscoveryForm
+            targets={DISCOVERY_TARGETS.map((t) => ({
+              id: t.id,
+              capability: t.capability,
+              industry_segment: t.industry_segment,
+              revenue_band: t.revenue_band,
+              description: t.description,
+            }))}
+          />
           <ScrapeForm />
           <CsvUpload />
         </div>
