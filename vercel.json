@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --ignore-scripts",
   "crons": [
     { "path": "/api/cron/scrape-importyeti", "schedule": "0 11 * * *" },
     { "path": "/api/cron/enqueue-enrichment", "schedule": "30 11 * * *" },
