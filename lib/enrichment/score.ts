@@ -1,6 +1,11 @@
 import { anthropic, CLAUDE_MODELS, extractJson, textFrom } from '@/lib/anthropic';
 import { createServiceClient } from '@/lib/supabase/server';
 import { buildShipmentSummary } from '@/lib/enrichment/shipments-summary';
+import { enqueue } from '@/lib/jobs';
+
+// Auto-trigger lookalike at this fit-score threshold — drives the
+// self-learning loop: winners spawn searches for more winners.
+const LOOKALIKE_THRESHOLD = 75;
 
 export interface ScoreResult {
   fit_score: number;
@@ -59,6 +64,24 @@ export async function runScore(companyId: string): Promise<ScoreResult> {
     .from('companies')
     .update({ fit_score: fit, status: newStatus } as never)
     .eq('id', companyId);
+
+  // Self-learning hook: if this lead crossed the lookalike threshold (and
+  // wasn't already above it before), queue a lookalike discovery job so
+  // the system pulls in more companies similar to this winner.
+  const wasBelow = (c.fit_score ?? 0) < LOOKALIKE_THRESHOLD;
+  if (wasBelow && fit >= LOOKALIKE_THRESHOLD) {
+    try {
+      await enqueue({
+        targetType: 'company',
+        targetId: companyId,
+        jobType: 'lookalike_discovery',
+        priority: 5,
+      });
+    } catch (e) {
+      // Non-fatal: lookalike is opportunistic
+      console.warn(`score: lookalike enqueue failed for ${companyId}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
 
   return { fit_score: fit, rationale: result.rationale };
 }

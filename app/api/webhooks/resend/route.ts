@@ -187,6 +187,19 @@ export async function POST(request: NextRequest) {
       } catch {
         /* ignore */
       }
+
+      // Self-learning hook: a reply is a strong positive signal. Queue a
+      // lookalike search seeded from this company so we find more like it.
+      try {
+        await enqueue({
+          targetType: 'company',
+          targetId: send.company_id,
+          jobType: 'lookalike_discovery',
+          priority: 6,
+        });
+      } catch {
+        /* ignore */
+      }
       break;
     }
     default:

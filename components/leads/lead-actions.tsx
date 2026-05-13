@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileSearch, Mail, Pencil, RefreshCw } from 'lucide-react';
+import { FileSearch, Mail, Pencil, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,28 @@ export function LeadActions({ leadId }: { leadId: string }) {
   const [note, setNote] = useState('');
   const [enriching, setEnriching] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
+  const [findingSimilar, setFindingSimilar] = useState(false);
+
+  async function findSimilar() {
+    setFindingSimilar(true);
+    try {
+      const res = await fetch('/api/discovery/lookalike', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: leadId, max_candidates: 10 }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      toast.success(`Found ${json.companies_created} similar companies`, {
+        description: `${json.candidates_returned} returned · ${json.companies_skipped_dedupe} already in DB · ${json.jobs_enqueued} enrichment jobs queued`,
+      });
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Lookalike failed');
+    } finally {
+      setFindingSimilar(false);
+    }
+  }
 
   async function runEnrich() {
     setEnriching(true);
@@ -62,6 +84,15 @@ export function LeadActions({ leadId }: { leadId: string }) {
         <Button variant="default" className="w-full justify-start" onClick={runEnrich} disabled={enriching}>
           <RefreshCw className={`h-4 w-4 ${enriching ? 'animate-spin' : ''}`} />
           {enriching ? 'Queueing…' : 'Run enrichment'}
+        </Button>
+        <Button
+          variant="accent"
+          className="w-full justify-start"
+          onClick={findSimilar}
+          disabled={findingSimilar}
+        >
+          <Sparkles className={`h-4 w-4 ${findingSimilar ? 'animate-pulse' : ''}`} />
+          {findingSimilar ? 'Searching…' : 'Find similar companies'}
         </Button>
         <Button variant="outline" className="w-full justify-start" asChild>
           <a href={`/composer?lead=${leadId}`}>

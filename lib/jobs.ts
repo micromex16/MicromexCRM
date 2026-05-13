@@ -6,7 +6,8 @@ export type JobType =
   | 'email_lookup'
   | 'score'
   | 'draft_email'
-  | 'classify_reply';
+  | 'classify_reply'
+  | 'lookalike_discovery';
 
 export type JobTarget = 'company' | 'contact';
 

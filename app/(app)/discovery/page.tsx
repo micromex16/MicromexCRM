@@ -6,8 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { CapabilityBadge } from '@/components/common/capability-badge';
 import { EmptyState } from '@/components/common/empty-state';
 import { DiscoveryForm } from '@/components/sources/discovery-form';
+import { CustomTargetDialog } from '@/components/discovery/custom-target-dialog';
 import { createClient } from '@/lib/supabase/server';
-import { DISCOVERY_TARGETS, todaysTarget } from '@/lib/discovery/targets';
+import { todaysTarget } from '@/lib/discovery/targets';
+import { allActiveTargets } from '@/lib/discovery/all-targets';
 import { formatDistanceToNow, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -39,13 +41,14 @@ export default async function DiscoveryPage() {
   const supabase = createClient();
   const today = todaysTarget();
 
-  const [runsRes, summaryRes] = await Promise.all([
+  const [runsRes, summaryRes, allTargets] = await Promise.all([
     supabase
       .from('discovery_runs')
       .select('id, target_id, trigger, candidates_returned, companies_created, companies_skipped_dedupe, jobs_enqueued, duration_ms, errors, created_at, profiles(email, full_name)')
       .order('created_at', { ascending: false })
       .limit(30),
     supabase.from('v_discovery_summary').select('*').maybeSingle(),
+    allActiveTargets(),
   ]);
 
   const runs = (runsRes.data ?? []) as unknown as RunRow[];
@@ -100,7 +103,7 @@ export default async function DiscoveryPage() {
       </div>
 
       <DiscoveryForm
-        targets={DISCOVERY_TARGETS.map((t) => ({
+        targets={allTargets.map((t) => ({
           id: t.id,
           capability: t.capability,
           industry_segment: t.industry_segment,
@@ -110,15 +113,18 @@ export default async function DiscoveryPage() {
       />
 
       <Card>
-        <CardHeader>
-          <CardTitle>Target profiles</CardTitle>
-          <CardDescription>
-            8 ICP slices the agent rotates through daily. Click a card to see only its runs.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle>Target profiles</CardTitle>
+            <CardDescription>
+              {allTargets.length} ICP slices the agent rotates through daily — built-in + your custom targets.
+            </CardDescription>
+          </div>
+          <CustomTargetDialog />
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {DISCOVERY_TARGETS.map((t) => {
+            {allTargets.map((t) => {
               const stats = runsByTarget.get(t.id);
               const isToday = t.id === today.id;
               return (
@@ -131,11 +137,18 @@ export default async function DiscoveryPage() {
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <CapabilityBadge bucket={t.capability} />
-                    {isToday && (
-                      <span className="rounded bg-accent-amber/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-amber">
-                        Today
-                      </span>
-                    )}
+                    <div className="flex gap-1">
+                      {t.id.startsWith('custom_') && (
+                        <span className="rounded bg-mx-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-mx-700">
+                          Custom
+                        </span>
+                      )}
+                      {isToday && (
+                        <span className="rounded bg-accent-amber/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-amber">
+                          Today
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="mb-1 font-display text-sm font-semibold">{t.industry_segment}</div>
                   <div className="mb-2 text-xs text-muted-foreground">{t.revenue_band}</div>
