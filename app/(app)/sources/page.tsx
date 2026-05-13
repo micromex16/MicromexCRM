@@ -1,9 +1,9 @@
+import Link from 'next/link';
+import { Sparkles, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrapeForm } from '@/components/sources/scrape-form';
 import { CsvUpload } from '@/components/sources/csv-upload';
-import { DiscoveryForm } from '@/components/sources/discovery-form';
 import { createClient } from '@/lib/supabase/server';
-import { DISCOVERY_TARGETS } from '@/lib/discovery/targets';
 import { formatDistanceToNow } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
@@ -42,17 +42,28 @@ export default async function SourcesPage() {
         </p>
       </div>
 
+      <Link
+        href="/discovery"
+        className="block rounded-lg border border-accent-amber/30 bg-accent-amber/[0.04] p-4 transition-colors hover:bg-accent-amber/[0.08]"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-md bg-accent-amber/15 p-2 text-accent-amber">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="font-display text-sm font-semibold">Looking for the discovery agent?</div>
+              <div className="text-xs text-muted-foreground">
+                Claude-led discovery has its own page now, with run history + target profiles.
+              </div>
+            </div>
+          </div>
+          <ArrowRight className="h-4 w-4 text-accent-amber" />
+        </div>
+      </Link>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
-          <DiscoveryForm
-            targets={DISCOVERY_TARGETS.map((t) => ({
-              id: t.id,
-              capability: t.capability,
-              industry_segment: t.industry_segment,
-              revenue_band: t.revenue_band,
-              description: t.description,
-            }))}
-          />
           <ScrapeForm />
           <CsvUpload />
         </div>

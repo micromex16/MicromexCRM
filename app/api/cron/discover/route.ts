@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   const target = todaysTarget();
   try {
-    const result = await runDiscovery(target, { maxCandidates: 10 });
+    const result = await runDiscovery(target, { maxCandidates: 10, trigger: 'cron' });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     return NextResponse.json(

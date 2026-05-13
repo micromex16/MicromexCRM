@@ -29,6 +29,12 @@ export interface DashboardData {
     capability_match: string[] | null;
     status: LeadStatus;
   }[];
+  discovery: {
+    runs_7d: number;
+    companies_7d: number;
+    companies_30d: number;
+    last_run_at: string | null;
+  };
 }
 
 export async function loadDashboard(): Promise<DashboardData> {
@@ -36,7 +42,7 @@ export async function loadDashboard(): Promise<DashboardData> {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const sinceWeeks = new Date(Date.now() - 84 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [companies, sendsRecent, sendsForChart, hot] = await Promise.all([
+  const [companies, sendsRecent, sendsForChart, hot, discoverySummary] = await Promise.all([
     supabase
       .from('companies')
       .select('id, status, industry_segment, fit_score, research_intelligence_json'),
@@ -49,6 +55,7 @@ export async function loadDashboard(): Promise<DashboardData> {
       .select('sent_at, replied_at')
       .gte('created_at', sinceWeeks),
     supabase.from('v_hot_leads').select('*').limit(10),
+    supabase.from('v_discovery_summary').select('*').maybeSingle(),
   ]);
 
   const all = (companies.data ?? []) as Array<{
@@ -122,6 +129,12 @@ export async function loadDashboard(): Promise<DashboardData> {
   const pipelineByWeek = Array.from(weekMap.entries()).map(([week, v]) => ({ week, ...v }));
 
   const hotLeads = (hot.data ?? []) as DashboardData['hotLeads'];
+  const disc = (discoverySummary.data as {
+    runs_7d?: number;
+    companies_7d?: number;
+    companies_30d?: number;
+    last_run_at?: string | null;
+  } | null) ?? null;
 
   return {
     stats: {
@@ -138,6 +151,12 @@ export async function loadDashboard(): Promise<DashboardData> {
     byStage,
     byIndustry,
     hotLeads,
+    discovery: {
+      runs_7d: disc?.runs_7d ?? 0,
+      companies_7d: disc?.companies_7d ?? 0,
+      companies_30d: disc?.companies_30d ?? 0,
+      last_run_at: disc?.last_run_at ?? null,
+    },
   };
 }
 

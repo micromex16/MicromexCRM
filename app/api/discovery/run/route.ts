@@ -35,7 +35,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await runDiscovery(target, { maxCandidates: parsed.data.max_candidates });
+    const result = await runDiscovery(target, {
+      maxCandidates: parsed.data.max_candidates,
+      trigger: 'manual',
+      createdBy: user.id,
+    });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     return NextResponse.json(

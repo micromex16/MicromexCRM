@@ -44,3 +44,5 @@ pnpm-debug.log*
 # claude code local state
 .claude/
 
+
+.vercel

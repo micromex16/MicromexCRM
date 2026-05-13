@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Activity, Flame, Send, Users, Trophy, TrendingUp } from 'lucide-react';
+import { Activity, Flame, Send, Users, Trophy, TrendingUp, Sparkles, ArrowRight } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -34,7 +35,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const { stats, pipelineByWeek, byStage, byIndustry, hotLeads } = data;
+  const { stats, pipelineByWeek, byStage, byIndustry, hotLeads, discovery } = data;
   const hasData = stats.totalLeads > 0;
 
   return (
@@ -78,6 +79,43 @@ export default async function DashboardPage() {
           icon={Flame}
         />
       </div>
+
+      <Card className="border-accent-amber/30 bg-accent-amber/[0.04]">
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 pt-6">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-accent-amber/15 p-2 text-accent-amber">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="font-display text-sm font-semibold">Discovery agent</div>
+              <div className="text-xs text-muted-foreground">
+                {discovery.last_run_at
+                  ? `Last run ${formatDistanceToNow(new Date(discovery.last_run_at), { addSuffix: true })}`
+                  : 'No runs yet — kick it off to surface fresh leads'}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="text-center">
+              <div className="font-display text-xl font-semibold">{discovery.runs_7d}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs (7d)</div>
+            </div>
+            <div className="text-center">
+              <div className="font-display text-xl font-semibold text-accent-amber">{discovery.companies_7d}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Leads (7d)</div>
+            </div>
+            <div className="text-center">
+              <div className="font-display text-xl font-semibold">{discovery.companies_30d}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Leads (30d)</div>
+            </div>
+            <Button asChild variant="accent" size="sm">
+              <Link href="/discovery">
+                Open <ArrowRight className="h-3 w-3" />
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

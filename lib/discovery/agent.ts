@@ -24,7 +24,15 @@ export interface DiscoveryResult {
   companies_created: number;
   companies_skipped_dedupe: number;
   jobs_enqueued: number;
+  duration_ms: number;
   errors: string[];
+  run_id?: string;
+}
+
+export interface DiscoveryOptions {
+  maxCandidates?: number;
+  trigger?: 'manual' | 'cron';
+  createdBy?: string | null;
 }
 
 const SYSTEM_PROMPT = `You are a sourcing analyst for Micromex, a US-Mexico contract manufacturer
@@ -82,9 +90,12 @@ If you cannot find good candidates, return an empty array. Do not fabricate.`;
 
 export async function runDiscovery(
   target: DiscoveryTarget,
-  options: { maxCandidates?: number } = {},
+  options: DiscoveryOptions = {},
 ): Promise<DiscoveryResult> {
   const max = options.maxCandidates ?? 10;
+  const trigger = options.trigger ?? 'manual';
+  const createdBy = options.createdBy ?? null;
+  const startedAt = Date.now();
   const client = anthropic();
 
   const msg = await client.messages.create({
@@ -119,6 +130,7 @@ export async function runDiscovery(
     companies_created: 0,
     companies_skipped_dedupe: 0,
     jobs_enqueued: 0,
+    duration_ms: 0,
     errors: [],
   };
 
@@ -202,6 +214,27 @@ export async function runDiscovery(
       result.errors.push(`enqueue ${c.name}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+
+  result.duration_ms = Date.now() - startedAt;
+
+  // Record this run for the /discovery history view.
+  const { data: runRow } = await supabase
+    .from('discovery_runs')
+    .insert({
+      target_id: target.id,
+      trigger,
+      candidates_returned: result.candidates_returned,
+      companies_created: result.companies_created,
+      companies_skipped_dedupe: result.companies_skipped_dedupe,
+      jobs_enqueued: result.jobs_enqueued,
+      duration_ms: result.duration_ms,
+      errors: result.errors as never,
+      created_by: createdBy,
+    } as never)
+    .select('id')
+    .maybeSingle();
+
+  if (runRow) result.run_id = (runRow as { id: string }).id;
 
   return result;
 }

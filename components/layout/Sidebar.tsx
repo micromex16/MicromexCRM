@@ -11,12 +11,14 @@ import {
   PenLine,
   Database,
   Settings,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/leads', label: 'Leads', icon: Users },
+  { href: '/discovery', label: 'Discovery', icon: Sparkles },
   { href: '/campaigns', label: 'Campaigns', icon: Send },
   { href: '/templates', label: 'Templates', icon: FileText },
   { href: '/composer', label: 'Composer', icon: PenLine },
