@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none">
+  <rect x="0" y="8" width="32" height="32" rx="6" fill="#1F5BA8"/>
+  <path d="M8 32 L8 16 L14 16 L16 22 L18 16 L24 16 L24 32 L20 32 L20 22 L18 28 L14 28 L12 22 L12 32 Z" fill="#fff"/>
+  <text x="40" y="30" font-family="Inter Tight, Inter, sans-serif" font-weight="700" font-size="20" fill="#0A284C" letter-spacing="-0.3">Micromex</text>
+  <text x="40" y="42" font-family="Inter, sans-serif" font-weight="500" font-size="9" fill="#789FD3" letter-spacing="1.2">LEAD ENGINE · EST. 1988</text>
+</svg>

@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 99%;
+    --foreground: 220 40% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 40% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 40% 12%;
+
+    /* Micromex Blue 500 */
+    --primary: 213 69% 39%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 220 40% 18%;
+
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 36 88% 59%;
+    --accent-foreground: 220 50% 10%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 213 69% 39%;
+
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 220 40% 7%;
+    --foreground: 210 40% 96%;
+
+    --card: 220 40% 9%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 220 40% 9%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 213 60% 55%;
+    --primary-foreground: 220 50% 10%;
+
+    --secondary: 220 30% 14%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 220 30% 14%;
+    --muted-foreground: 215 16% 65%;
+
+    --accent: 36 88% 59%;
+    --accent-foreground: 220 50% 10%;
+
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 25% 18%;
+    --input: 220 25% 18%;
+    --ring: 213 60% 55%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground antialiased; }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; }
+}
+
+@layer utilities {
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.5) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.5) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+}

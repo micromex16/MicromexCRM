@@ -1,0 +1,42 @@
+# deps
+node_modules
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+build/
+dist/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+
+# vercel
+.vercel
+
+# supabase
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# generated
+*.tsbuildinfo
+next-env.d.ts
+playwright-report/
+test-results/
+.playwright/
+
+# logs
+logs
+npm-debug.log*
+pnpm-debug.log*
