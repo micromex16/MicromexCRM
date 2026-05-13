@@ -8,6 +8,7 @@ import { CapabilityList } from '@/components/common/capability-badge';
 import { StatusBadge } from '@/components/common/status-badge';
 import { EmptyState } from '@/components/common/empty-state';
 import { LeadFilters } from '@/components/leads/filters';
+import { BulkEnrichButton } from '@/components/leads/bulk-enrich-button';
 import { createClient } from '@/lib/supabase/server';
 import type { CapabilityBucket, LeadStatus } from '@/lib/types/domain';
 
@@ -53,9 +54,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             {count ?? 0} companies · sorted by fit score
           </p>
         </div>
-        <Button asChild>
-          <Link href="/sources">Add leads</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <BulkEnrichButton />
+          <Button asChild>
+            <Link href="/sources">Add leads</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-6">
