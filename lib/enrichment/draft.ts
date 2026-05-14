@@ -74,6 +74,7 @@ export async function draftEmail(args: DraftArgs): Promise<DraftResult> {
   const summary = await buildShipmentSummary(ct.company_id);
 
   const todayStr = new Date().toISOString().slice(0, 10);
+  const senderName = process.env.RESEND_FROM_NAME ?? 'Giovanni Garcin';
   const userPrompt = DRAFT_PROMPT
     .replace('{{contact.first_name}}', ct.first_name ?? 'there')
     .replace('{{contact.last_name}}', ct.last_name ?? '')
@@ -84,7 +85,8 @@ export async function draftEmail(args: DraftArgs): Promise<DraftResult> {
       '{{research_intelligence_json.opening_hook}}',
       co.research_intelligence_json?.opening_hook ?? '(use a shipment fact)',
     )
-    .replace('{{today_date}}', todayStr);
+    .replace('{{today_date}}', todayStr)
+    .replace('{{sender_name}}', senderName);
 
   const client = anthropic();
   const msg = await client.messages.create({
@@ -153,6 +155,6 @@ Constraints:
   - CTA: ask for a 20-minute call next week, propose two concrete time slots
     relative to today's date
   - No emojis, no "I hope this finds you well", no "circling back"
-  - End with: Giovanni Hernandez, Micromex (signature added downstream)
+  - End with: {{sender_name}}, Micromex (signature added downstream)
 
 Output JSON: { "subject": "...", "body_md": "..." }`;
