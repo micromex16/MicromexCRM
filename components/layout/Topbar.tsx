@@ -1,22 +1,26 @@
 import { Bell, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MobileSidebar } from '@/components/layout/Sidebar';
 import { initials } from '@/lib/utils';
 
 export function Topbar({ email }: { email: string | null }) {
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b bg-background px-6">
-      <form action="/leads" method="get" className="relative w-full max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="search"
-          name="q"
-          placeholder="Search companies by name…  (press Enter)"
-          className="h-9 pl-9"
-        />
-      </form>
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" aria-label="Notifications">
+    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-background px-3 sm:px-6">
+      <div className="flex flex-1 items-center gap-1">
+        <MobileSidebar />
+        <form action="/leads" method="get" className="relative w-full max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            name="q"
+            placeholder="Search companies…"
+            className="h-9 pl-9"
+          />
+        </form>
+      </div>
+      <div className="flex items-center gap-2 sm:gap-3">
+        <Button variant="ghost" size="icon" aria-label="Notifications" className="hidden sm:flex">
           <Bell className="h-4 w-4" />
         </Button>
         <form action="/auth/signout" method="POST">

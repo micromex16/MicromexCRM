@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, Sparkles, Send, ExternalLink, Loader2 } from 'lucide-react';
+import { Mail, Sparkles, Send, ExternalLink, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CapabilityBucket } from '@/lib/types/domain';
 
@@ -28,6 +28,14 @@ interface Template {
   body_md: string;
 }
 
+interface Contact {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  title: string | null;
+  email: string | null;
+}
+
 export function ComposerForm({
   initialLeadId,
   leads,
@@ -38,8 +46,8 @@ export function ComposerForm({
   templates: Template[];
 }) {
   const [leadId, setLeadId] = useState(initialLeadId ?? leads[0]?.id ?? '');
-  const [contactId, setContactId] = useState<string>('');
-  const [contacts, setContacts] = useState<Array<{ id: string; first_name: string | null; last_name: string | null; title: string | null; email: string | null }>>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
   const [templateId, setTemplateId] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -49,32 +57,60 @@ export function ComposerForm({
   const lead = leads.find((l) => l.id === leadId);
   const caps = (lead?.capability_match ?? []) as CapabilityBucket[];
   const filteredTemplates = templates.filter((t) => caps.length === 0 || caps.includes(t.capability_bucket));
+  const selectedCount = selectedContactIds.size;
+  const primaryContactId = selectedContactIds.values().next().value as string | undefined;
 
   useEffect(() => {
     if (!leadId) return;
     fetch(`/api/leads/${leadId}/contacts`)
       .then((r) => r.json())
       .then((j) => {
-        setContacts(j.contacts ?? []);
-        if (j.contacts?.length) setContactId(j.contacts[0].id);
+        const list: Contact[] = j.contacts ?? [];
+        setContacts(list);
+        // Auto-select the first contact (usually the primary one)
+        setSelectedContactIds(new Set(list.length > 0 ? [list[0].id] : []));
       })
-      .catch(() => setContacts([]));
+      .catch(() => {
+        setContacts([]);
+        setSelectedContactIds(new Set());
+      });
   }, [leadId]);
 
+  function toggleContact(id: string) {
+    setSelectedContactIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelectedContactIds(new Set(contacts.filter((c) => c.email).map((c) => c.id)));
+  }
+
+  function selectNone() {
+    setSelectedContactIds(new Set());
+  }
+
   async function draft() {
-    if (!contactId || !templateId) return;
+    if (!primaryContactId || !templateId) return;
     setDrafting(true);
     try {
       const res = await fetch('/api/composer/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contact_id: contactId, template_id: templateId }),
+        body: JSON.stringify({ contact_id: primaryContactId, template_id: templateId }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       setSubject(json.subject);
       setBody(json.body_md);
-      toast.success('Draft ready — edit and send.');
+      toast.success(
+        selectedCount > 1
+          ? `Draft ready — first name will be substituted for each of the ${selectedCount} recipients.`
+          : 'Draft ready — edit and send.',
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Draft failed');
     } finally {
@@ -83,24 +119,35 @@ export function ComposerForm({
   }
 
   async function send() {
-    if (!contactId || !subject || !body) return;
+    if (selectedCount === 0 || !subject || !body) return;
     setSending(true);
     try {
       const res = await fetch('/api/composer/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contact_id: contactId, subject, body_md: body, template_id: templateId }),
+        body: JSON.stringify({
+          contact_ids: Array.from(selectedContactIds),
+          subject,
+          body_md: body,
+          template_id: templateId,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      if (json.status === 'sent') {
-        toast.success('Sent ✉', {
-          description: json.resend_message_id ? `Resend ID: ${json.resend_message_id}` : undefined,
+      const sent = json.sent ?? 0;
+      const failed = json.failed ?? 0;
+      const suppressed = json.skipped_suppressed ?? 0;
+      if (sent > 0) {
+        toast.success(`Sent to ${sent}${selectedCount > 1 ? ' contacts' : ''} ✉`, {
+          description: [
+            failed > 0 ? `${failed} failed` : null,
+            suppressed > 0 ? `${suppressed} suppressed` : null,
+          ].filter(Boolean).join(' · ') || undefined,
         });
-      } else if (json.status === 'skipped_suppressed') {
-        toast.error('Skipped — contact is on the suppression list');
       } else {
-        toast.error('Send failed', { description: json.error ?? 'unknown' });
+        toast.error('All sends failed', {
+          description: (json.errors ?? []).slice(0, 3).join('\n') || undefined,
+        });
       }
       setSubject('');
       setBody('');
@@ -112,12 +159,16 @@ export function ComposerForm({
   }
 
   function openMailto() {
-    const contact = contacts.find((c) => c.id === contactId);
-    if (!contact?.email) {
-      toast.error('No email on file for this contact.');
+    if (selectedContactIds.size === 0) return;
+    const emails = contacts
+      .filter((c) => selectedContactIds.has(c.id) && c.email)
+      .map((c) => c.email!)
+      .join(',');
+    if (!emails) {
+      toast.error('No emails on file for the selected contacts.');
       return;
     }
-    const href = `mailto:${contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const href = `mailto:${emails}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.location.href = href;
   }
 
@@ -126,7 +177,11 @@ export function ComposerForm({
       <Card>
         <CardHeader>
           <CardTitle>Draft</CardTitle>
-          <CardDescription>Personalize before sending.</CardDescription>
+          <CardDescription>
+            {selectedCount > 1
+              ? `Same body sent to ${selectedCount} contacts. First name in the greeting is substituted per recipient.`
+              : 'Personalize before sending.'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
@@ -141,20 +196,24 @@ export function ComposerForm({
               onChange={(e) => setBody(e.target.value)}
               className="min-h-[320px]"
             />
+            <p className="text-[11px] text-muted-foreground">
+              Tip: use <code className="rounded bg-muted px-1">{'{{contact.first_name}}'}</code> in the greeting so each recipient gets their own name.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={send} disabled={sending || !subject || !body || !contactId}>
+            <Button onClick={send} disabled={sending || !subject || !body || selectedCount === 0}>
               {sending ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Queueing…
+                  <Loader2 className="h-4 w-4 animate-spin" /> Sending…
                 </>
               ) : (
                 <>
-                  <Send className="h-4 w-4" /> Send via Resend
+                  <Send className="h-4 w-4" />
+                  Send to {selectedCount} {selectedCount === 1 ? 'contact' : 'contacts'}
                 </>
               )}
             </Button>
-            <Button variant="outline" onClick={openMailto} disabled={!subject || !body}>
+            <Button variant="outline" onClick={openMailto} disabled={!subject || !body || selectedCount === 0}>
               <ExternalLink className="h-4 w-4" /> Open in mail client
             </Button>
           </div>
@@ -184,23 +243,71 @@ export function ComposerForm({
         </Card>
 
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Contact</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm">
+              Contacts <span className="text-muted-foreground">({selectedCount} selected)</span>
+            </CardTitle>
+            {contacts.length > 0 && (
+              <div className="flex gap-1 text-[11px]">
+                <button
+                  type="button"
+                  onClick={selectAll}
+                  className="text-mx-600 hover:underline"
+                >
+                  All
+                </button>
+                <span className="text-muted-foreground">·</span>
+                <button
+                  type="button"
+                  onClick={selectNone}
+                  className="text-mx-600 hover:underline"
+                >
+                  None
+                </button>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="pt-0">
-            <Select value={contactId} onValueChange={setContactId} disabled={contacts.length === 0}>
-              <SelectTrigger>
-                <SelectValue placeholder={contacts.length === 0 ? 'No contacts found' : 'Pick a contact…'} />
-              </SelectTrigger>
-              <SelectContent>
-                {contacts.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {[c.first_name, c.last_name].filter(Boolean).join(' ')}
-                    {c.title ? ` · ${c.title}` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {contacts.length === 0 ? (
+              <p className="py-3 text-center text-xs text-muted-foreground">No contacts found.</p>
+            ) : (
+              <ul className="max-h-72 space-y-1 overflow-y-auto">
+                {contacts.map((c) => {
+                  const checked = selectedContactIds.has(c.id);
+                  const hasEmail = Boolean(c.email);
+                  return (
+                    <li key={c.id}>
+                      <label
+                        className={`flex cursor-pointer items-start gap-2 rounded-md p-2 text-sm transition-colors ${
+                          checked ? 'bg-mx-50' : 'hover:bg-muted/40'
+                        } ${!hasEmail ? 'opacity-50' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-3.5 w-3.5 accent-mx-500"
+                          checked={checked}
+                          disabled={!hasEmail}
+                          onChange={() => toggleContact(c.id)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">
+                            {[c.first_name, c.last_name].filter(Boolean).join(' ') || '(no name)'}
+                          </div>
+                          {c.title && (
+                            <div className="truncate text-[11px] text-muted-foreground">{c.title}</div>
+                          )}
+                          {c.email ? (
+                            <div className="truncate text-[11px] text-muted-foreground">{c.email}</div>
+                          ) : (
+                            <div className="text-[11px] italic text-destructive">no email on file</div>
+                          )}
+                        </div>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </CardContent>
         </Card>
 
@@ -225,7 +332,7 @@ export function ComposerForm({
               variant="default"
               className="w-full"
               onClick={draft}
-              disabled={!contactId || !templateId || drafting}
+              disabled={!primaryContactId || !templateId || drafting}
             >
               {drafting ? (
                 <>
@@ -238,7 +345,8 @@ export function ComposerForm({
               )}
             </Button>
             <p className="text-[11px] text-muted-foreground">
-              Claude rewrites the template in plain English using the lead's research + shipment data.
+              Draft uses the first selected contact's name. The body is shared across all recipients;
+              first names are substituted per send.
             </p>
           </CardContent>
         </Card>
@@ -250,9 +358,13 @@ export function ComposerForm({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 pt-0 text-xs text-muted-foreground">
-            <p>· Sends count against the daily cap.</p>
-            <p>· Suppressed emails are skipped silently.</p>
+            <p>· Each contact counts against the daily cap.</p>
+            <p>· Suppressed emails skipped silently.</p>
             <p>· Footer + unsubscribe link added automatically.</p>
+            <p>
+              <Check className="mr-1 inline h-3 w-3 text-mx-500" />
+              Signature appended per send.
+            </p>
           </CardContent>
         </Card>
       </div>

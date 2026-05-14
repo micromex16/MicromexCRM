@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -12,6 +13,8 @@ import {
   Database,
   Settings,
   Sparkles,
+  Menu,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,12 +29,35 @@ const NAV = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ] as const;
 
-export function Sidebar() {
+function NavList({ onClick }: { onClick?: () => void }) {
   const path = usePathname();
-
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col bg-mx-900 text-mx-100">
-      <div className="flex h-16 items-center gap-2 px-5">
+    <nav className="flex-1 space-y-0.5 px-3 py-2">
+      {NAV.map(({ href, label, icon: Icon }) => {
+        const active = href === '/' ? path === '/' : path.startsWith(href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            onClick={onClick}
+            className={cn(
+              'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              active ? 'bg-mx-700 text-white' : 'text-mx-200 hover:bg-mx-800 hover:text-white',
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function BrandHeader({ onClose }: { onClose?: () => void }) {
+  return (
+    <div className="flex h-16 items-center justify-between gap-2 px-5">
+      <div className="flex items-center gap-2">
         <div className="rounded-md bg-white/10 p-1.5">
           <Image src="/favicon.svg" alt="" width={20} height={20} />
         </div>
@@ -42,31 +68,67 @@ export function Sidebar() {
           <div className="text-[10px] uppercase tracking-wider text-mx-300">Lead Engine</div>
         </div>
       </div>
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md p-1.5 text-mx-200 hover:bg-mx-800 hover:text-white"
+          aria-label="Close menu"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
 
-      <nav className="flex-1 space-y-0.5 px-3 py-2">
-        {NAV.map(({ href, label, icon: Icon }) => {
-          const active = href === '/' ? path === '/' : path.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                active
-                  ? 'bg-mx-700 text-white'
-                  : 'text-mx-200 hover:bg-mx-800 hover:text-white',
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
-
+/** Permanent sidebar — visible on md and up. */
+export function Sidebar() {
+  return (
+    <aside className="hidden h-screen w-60 shrink-0 flex-col bg-mx-900 text-mx-100 md:flex">
+      <BrandHeader />
+      <NavList />
       <div className="border-t border-mx-800 p-4 text-[10px] uppercase tracking-wider text-mx-400">
         Est. 1988 · USMCA
       </div>
     </aside>
+  );
+}
+
+/** Mobile drawer + hamburger trigger button. Mount this in the topbar. */
+export function MobileSidebar() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="-ml-2 mr-1 rounded-md p-2 text-foreground hover:bg-muted md:hidden"
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {open && (
+        <>
+          {/* Backdrop */}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close menu"
+            className="fixed inset-0 z-40 bg-mx-900/60 md:hidden"
+          />
+          {/* Drawer */}
+          <aside className="fixed left-0 top-0 z-50 flex h-screen w-60 flex-col bg-mx-900 text-mx-100 shadow-xl md:hidden">
+            <BrandHeader onClose={() => setOpen(false)} />
+            <NavList onClick={() => setOpen(false)} />
+            <div className="border-t border-mx-800 p-4 text-[10px] uppercase tracking-wider text-mx-400">
+              Est. 1988 · USMCA
+            </div>
+          </aside>
+        </>
+      )}
+    </>
   );
 }

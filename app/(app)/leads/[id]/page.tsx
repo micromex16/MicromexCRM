@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/common/status-badge';
 import { ResearchIntel } from '@/components/leads/research-intel';
 import { ActivityTimeline, type ActivityRow } from '@/components/leads/activity-timeline';
 import { LeadActions } from '@/components/leads/lead-actions';
+import { EmailThread, type ThreadSend, type ThreadContact } from '@/components/leads/email-thread';
 import { createClient } from '@/lib/supabase/server';
 import { initials } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -67,10 +68,10 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       .limit(50),
     supabase
       .from('sends')
-      .select('id, subject_rendered, status, sent_at, replied_at, reply_classification, contacts(first_name,last_name,email)')
+      .select('id, contact_id, subject_rendered, body_rendered, status, sent_at, opened_at, clicked_at, replied_at, bounced_at, reply_body, reply_classification, created_at, contacts(first_name,last_name,email)')
       .eq('company_id', params.id)
       .order('created_at', { ascending: false })
-      .limit(20),
+      .limit(50),
   ]);
 
   const contacts = (contactsRes.data ?? []) as Array<{
@@ -98,16 +99,23 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
   const activities = (activitiesRes.data ?? []) as ActivityRow[];
   const sends = (sendsRes.data ?? []) as Array<{
     id: string;
+    contact_id: string;
     subject_rendered: string;
+    body_rendered: string;
     status: string;
     sent_at: string | null;
+    opened_at: string | null;
+    clicked_at: string | null;
     replied_at: string | null;
+    bounced_at: string | null;
+    reply_body: string | null;
     reply_classification: string | null;
-    contacts: { first_name: string | null; last_name: string | null; email: string | null };
+    created_at: string;
+    contacts: { first_name: string | null; last_name: string | null; email: string | null } | null;
   }>;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <div>
         <Link href="/leads" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3 w-3" /> Back to leads
@@ -146,9 +154,9 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
-        <div className="min-w-0 space-y-4">
+        <div className="order-2 min-w-0 space-y-4 lg:order-1">
           <Tabs defaultValue="overview">
-            <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsList className="flex w-full justify-start overflow-x-auto">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="research">Research</TabsTrigger>
               <TabsTrigger value="contacts">
@@ -317,42 +325,31 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
             </TabsContent>
 
             <TabsContent value="emails" className="space-y-4">
-              {sends.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                    No emails sent yet.
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Subject</TableHead>
-                          <TableHead>To</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Sent</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {sends.map((s) => (
-                          <TableRow key={s.id}>
-                            <TableCell className="font-medium">{s.subject_rendered}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {s.contacts?.email ?? '—'}
-                            </TableCell>
-                            <TableCell className="capitalize text-sm">{s.status}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {s.sent_at ? format(new Date(s.sent_at), 'PPp') : '—'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              )}
+              <EmailThread
+                contacts={contacts.map((p): ThreadContact => ({
+                  id: p.id,
+                  first_name: p.first_name,
+                  last_name: p.last_name,
+                  title: p.title,
+                  email: p.email,
+                }))}
+                sends={sends.map((s): ThreadSend => ({
+                  id: s.id,
+                  contact_id: s.contact_id,
+                  subject_rendered: s.subject_rendered,
+                  body_rendered: s.body_rendered,
+                  status: s.status,
+                  sent_at: s.sent_at,
+                  opened_at: s.opened_at,
+                  clicked_at: s.clicked_at,
+                  replied_at: s.replied_at,
+                  bounced_at: s.bounced_at,
+                  reply_body: s.reply_body,
+                  reply_classification: s.reply_classification,
+                  created_at: s.created_at,
+                }))}
+                leadId={c.id}
+              />
             </TabsContent>
 
             <TabsContent value="activity" className="space-y-4">
@@ -365,7 +362,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           </Tabs>
         </div>
 
-        <div className="space-y-4">
+        <div className="order-1 space-y-4 lg:order-2">
           <LeadActions leadId={c.id} />
         </div>
       </div>

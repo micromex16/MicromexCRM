@@ -46,15 +46,15 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
   const { data: leads, count, error } = await query;
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-end justify-between">
+    <div className="space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight">Leads</h1>
           <p className="text-sm text-muted-foreground">
             {count ?? 0} companies · sorted by fit score
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <BulkEnrichButton />
           <Button asChild>
             <Link href="/sources">Add leads</Link>
@@ -62,10 +62,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
         </div>
       </div>
 
-      <div className="flex gap-6">
-        <LeadFilters />
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="lg:w-60 lg:shrink-0">
+          <LeadFilters />
+        </div>
 
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           {error ? (
             <EmptyState
               icon={Users}

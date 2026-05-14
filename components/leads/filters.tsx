@@ -52,7 +52,7 @@ export function LeadFilters() {
   const clear = () => router.push('/leads');
 
   return (
-    <div className="w-60 shrink-0 space-y-4">
+    <div className="w-full space-y-4">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Capability</CardTitle>

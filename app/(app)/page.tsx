@@ -52,7 +52,7 @@ export default async function DashboardPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total pipeline"
           value={formatCurrency(stats.pipelineEstimateUsd, { compact: true })}
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
       </div>
 
       <Card className="border-accent-amber/30 bg-accent-amber/[0.04]">
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 pt-6">
+        <CardContent className="flex flex-col flex-wrap items-start justify-between gap-4 pt-6 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-accent-amber/15 p-2 text-accent-amber">
               <Sparkles className="h-5 w-5" />
