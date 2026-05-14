@@ -12,6 +12,8 @@ import { DeleteCampaignButton } from '@/components/campaigns/delete-campaign-but
 import { FlushQueueButton } from '@/components/campaigns/flush-queue-button';
 import { SendNowButton } from '@/components/campaigns/send-now-button';
 import { ProcessDraftsButton } from '@/components/campaigns/process-drafts-button';
+import { SendDetailDialog } from '@/components/campaigns/send-detail-dialog';
+import { RetryFailedButton } from '@/components/campaigns/retry-failed-button';
 import { createClient } from '@/lib/supabase/server';
 import { format, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -43,9 +45,14 @@ interface CampaignRow {
 interface SendRow {
   id: string;
   subject_rendered: string;
+  body_rendered: string;
   status: string;
+  error: string | null;
+  resend_message_id: string | null;
+  reply_body: string | null;
   sent_at: string | null;
   opened_at: string | null;
+  clicked_at: string | null;
   replied_at: string | null;
   bounced_at: string | null;
   reply_classification: string | null;
@@ -325,6 +332,9 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           {(activeFilter === 'queued' || activeFilter === 'all') && counts.queued > 0 && (
             <FlushQueueButton campaignId={c.id} queuedCount={counts.queued} />
           )}
+          {activeFilter === 'failed' && counts.failed > 0 && (
+            <RetryFailedButton campaignId={c.id} failedCount={counts.failed} />
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {activeFilter === 'drafting' ? (
@@ -456,7 +466,30 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                         : formatDistanceToNow(new Date(s.created_at), { addSuffix: true })}
                     </TableCell>
                     <TableCell className="text-right">
-                      {s.status === 'queued' && <SendNowButton sendId={s.id} />}
+                      <div className="inline-flex items-center gap-1">
+                        <SendDetailDialog
+                          send={{
+                            id: s.id,
+                            subject: s.subject_rendered,
+                            body: s.body_rendered,
+                            status: s.status,
+                            error: s.error,
+                            sent_at: s.sent_at,
+                            opened_at: s.opened_at,
+                            clicked_at: s.clicked_at,
+                            replied_at: s.replied_at,
+                            bounced_at: s.bounced_at,
+                            reply_body: s.reply_body,
+                            reply_classification: s.reply_classification,
+                            resend_message_id: s.resend_message_id,
+                            created_at: s.created_at,
+                            recipient_name:
+                              [s.contacts?.first_name, s.contacts?.last_name].filter(Boolean).join(' ') || null,
+                            recipient_email: s.contacts?.email ?? null,
+                          }}
+                        />
+                        {s.status === 'queued' && <SendNowButton sendId={s.id} />}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
