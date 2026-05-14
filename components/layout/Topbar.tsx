@@ -6,14 +6,15 @@ import { initials } from '@/lib/utils';
 export function Topbar({ email }: { email: string | null }) {
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b bg-background px-6">
-      <div className="relative w-full max-w-md">
+      <form action="/leads" method="get" className="relative w-full max-w-md">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search leads, companies, contacts…"
+          name="q"
+          placeholder="Search companies by name…  (press Enter)"
           className="h-9 pl-9"
         />
-      </div>
+      </form>
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" aria-label="Notifications">
           <Bell className="h-4 w-4" />
