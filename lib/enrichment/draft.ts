@@ -44,7 +44,7 @@ export async function draftEmail(args: DraftArgs): Promise<DraftResult> {
   const [{ data: company }, { data: template }] = await Promise.all([
     supabase
       .from('companies')
-      .select('id, name, domain, website, research_intelligence_json')
+      .select('id, name, domain, website, industry_segment, research_summary, research_intelligence_json')
       .eq('id', ct.company_id)
       .single(),
     supabase
@@ -61,7 +61,15 @@ export async function draftEmail(args: DraftArgs): Promise<DraftResult> {
     name: string;
     domain: string | null;
     website: string | null;
-    research_intelligence_json: { opening_hook?: string } | null;
+    industry_segment: string | null;
+    research_summary: string | null;
+    research_intelligence_json: {
+      opening_hook?: string;
+      current_vendor_guess?: string;
+      switching_triggers?: string[];
+      primary_capability_match?: string;
+      buying_committee_titles?: string[];
+    } | null;
   };
   const tp = template as {
     id: string;
@@ -84,16 +92,45 @@ export async function draftEmail(args: DraftArgs): Promise<DraftResult> {
     process.env.COMPANY_PITCH ??
     'USMCA-qualifying contract manufacturer — same-day truck to Phoenix, no Section 301 exposure';
 
+  // Build a rich, lead-specific context block. The single biggest cause
+  // of generic emails is that we only passed `opening_hook` before — Claude
+  // had no idea what the company actually sold.
+  const intel = co.research_intelligence_json ?? {};
+  const switchingTriggers = intel.switching_triggers?.length
+    ? intel.switching_triggers.map((t) => `   • ${t}`).join('\n')
+    : '   • (none on file — infer from research summary)';
+
+  const leadContext =
+    `WHAT ${co.name.toUpperCase()} ACTUALLY DOES (this is the most important
+section — every line of the email must speak to THIS company specifically,
+not the template's example products):
+
+Industry: ${co.industry_segment ?? '(unknown)'}
+Domain: ${co.domain ?? '(unknown)'}
+Top shipment signals (real customs data, if any):
+  - Top HTS chapters: ${summary.top_hts.map((h) => h.code).join(', ') || '(none)'}
+  - Top origin countries: ${summary.top_origin_countries.map((c) => c.country).join(', ') || '(none)'}
+  - Sample product descriptions:
+${summary.sample_products.length ? summary.sample_products.map((p) => '    - ' + p).join('\n') : '    - (none on file)'}
+
+Research brief (Claude-generated earlier):
+${co.research_summary ?? '(no research summary yet)'}
+
+Strategic intel:
+  - Primary capability fit: ${intel.primary_capability_match ?? '(unknown)'}
+  - Current vendor guess: ${intel.current_vendor_guess ?? '(unknown)'}
+  - Opening hook: ${intel.opening_hook ?? '(use a shipment fact)'}
+  - Switching triggers:
+${switchingTriggers}
+  - Buying committee: ${intel.buying_committee_titles?.join(', ') ?? '(unknown)'}`;
+
   const userPrompt = DRAFT_PROMPT
     .replace('{{contact.first_name}}', ct.first_name ?? 'there')
     .replace('{{contact.last_name}}', ct.last_name ?? '')
     .replace('{{contact.title}}', ct.title ?? '')
     .replace('{{company.name}}', co.name)
     .replace('{{template.body_md}}', tp.body_md)
-    .replace(
-      '{{research_intelligence_json.opening_hook}}',
-      co.research_intelligence_json?.opening_hook ?? '(use a shipment fact)',
-    )
+    .replace('{{lead_context}}', leadContext)
     .replace('{{today_date}}', todayStr)
     .replace('{{sender_name}}', senderName)
     .replace('{{company_founded_year}}', foundedYear)
@@ -104,7 +141,7 @@ export async function draftEmail(args: DraftArgs): Promise<DraftResult> {
   const client = anthropic();
   const msg = await client.messages.create({
     model: CLAUDE_MODELS.research,
-    max_tokens: 800,
+    max_tokens: 1000,
     temperature: 0.4,
     messages: [{ role: 'user', content: userPrompt }],
   });
@@ -153,44 +190,57 @@ const DRAFT_PROMPT = `Today's date: {{today_date}}.
 Draft a cold first-touch email from a Micromex BD rep to {{contact.first_name}}
 {{contact.last_name}}, {{contact.title}} at {{company.name}}.
 
-About Micromex (use these as credibility — at least one MUST appear in the
-body, ideally the founding year + a certification):
+==============================================================================
+ABOUT MICROMEX (use these as credibility — at least one MUST appear in the
+body, ideally founding year + a certification):
   - Founded {{company_founded_year}}
   - Certifications: {{company_certifications}}
   - Facilities: {{company_facilities}}
   - {{company_pitch}}
 
-THE TEMPLATE BELOW DEFINES THE ANGLE OF THIS EMAIL — you must preserve it.
-The template's opening line, body focus, and proof point are the angle.
-Rewrite for plain conversational English using this lead's specifics, but
-do NOT substitute a different angle than the template uses.
+==============================================================================
+{{lead_context}}
 
-Template (this is the angle — match it):
+==============================================================================
+TEMPLATE — THIS IS THE ANGLE, NOT THE CONTENT.
+
+The template defines HOW the email is framed (capability-led vs tariff-math-
+led vs refurb-recovery-led etc.). DO preserve its angle, structure, tone,
+and CTA style.
+
+BUT — and this is critical — the template uses GENERIC EXAMPLE PRODUCTS
+("elevator parts, door sheaves, hardware kits" / "toys, temp tattoos") as
+placeholders. THESE ARE NOT THE CONTENT OF YOUR EMAIL. Replace those
+example products with what {{company.name}} ACTUALLY MAKES, based on the
+lead context above. If the template says "hardware kits" but this company
+makes weighted blankets, your email must talk about weighted blankets, not
+hardware. If the template says "toys" but this lead does premium pet
+accessories, talk about pet accessories.
+
+Template:
 {{template.body_md}}
 
-Lead context you may weave in (use only if it fits the template's angle —
-do NOT graft on a different angle to use these facts):
-  - Opening hook from research: {{research_intelligence_json.opening_hook}}
-
-Rules:
-  - Subject: max 6 words. Stay in the style of the template's subject.
-    If the template subject is "{{company.name}} + harnesses out of Mexico?",
-    your subject should be similar (capability-framed). If it's
-    "tariff math for {{company.name}}", yours should be math-framed.
-  - Opening line: MATCH the template's opening style. If the template opens
-    with "We do X" (capability lead), open with "We" — do NOT pivot to
-    "Noticed you import...". If the template opens with "Quick number" or
-    "If you're importing" (tariff math), open with the number/math angle.
-  - Body: stay within the template's angle. You may personalize with the
-    lead's product line or origin country, but don't graft on a tariff
-    angle if the template is capability-led, or vice versa.
-  - Include AT LEAST ONE company credibility signal from the "About Micromex"
-    block — the founding year + a certification are the strongest. Weave
-    them naturally ("ISO 9001-certified shop running since 1988…", not a
-    bulleted list of facts).
-  - Add ONE specific proof point appropriate to the capability:
+==============================================================================
+RULES:
+  - PERSONALIZATION IS THE #1 PRIORITY. The email must read like it was
+    written for {{company.name}} specifically. Every product noun should be
+    THEIR product line, not the template's. If you can't tell what they
+    make from the lead context, say "your team" or "your product line" —
+    don't invent products.
+  - Body should specifically reference: their actual product category, and
+    at least one signal from their shipment data / research brief (current
+    vendor guess, switching trigger, or industry-specific pain point).
+  - Subject: max 6 words, in the style of the template's subject. Replace
+    the template's example product noun with their actual product noun.
+  - Opening line: match the template's opening STYLE (capability-led vs
+    tariff-math-led vs recovery-math-led), but the words/products must be
+    about THIS company.
+  - Include AT LEAST ONE company credibility signal from "ABOUT MICROMEX" —
+    weave it naturally ("ISO 9001-certified shop running since 1988…"),
+    not as a bulleted list.
+  - Include ONE specific Micromex proof point appropriate to the capability:
       electrical -> harness/cord-set track record
-      refurb     -> "Terra Kaffe" reference customer
+      refurb     -> "Terra Kaffe" reference customer (premium home espresso)
       packaging  -> hand-pack / retail-ready / kitting volume
       mechanical -> same-day truck to Phoenix / labor advantage
   - CTA: ask for a 20-minute call next week, propose two concrete time
