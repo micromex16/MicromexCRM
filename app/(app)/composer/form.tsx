@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, Sparkles, Send, ExternalLink, Loader2, Check } from 'lucide-react';
+import { Mail, Sparkles, Send, ExternalLink, Loader2, Check, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CapabilityBucket } from '@/lib/types/domain';
 
@@ -52,6 +52,8 @@ export function ComposerForm({
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [drafting, setDrafting] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [tweakInstruction, setTweakInstruction] = useState('');
   const [sending, setSending] = useState(false);
 
   const lead = leads.find((l) => l.id === leadId);
@@ -115,6 +117,34 @@ export function ComposerForm({
       toast.error(e instanceof Error ? e.message : 'Draft failed');
     } finally {
       setDrafting(false);
+    }
+  }
+
+  async function refine() {
+    if (!primaryContactId || !templateId || !subject || !body || !tweakInstruction.trim()) return;
+    setRefining(true);
+    try {
+      const res = await fetch('/api/composer/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: primaryContactId,
+          template_id: templateId,
+          tweak_instruction: tweakInstruction.trim(),
+          current_subject: subject,
+          current_body: body,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setSubject(json.subject);
+      setBody(json.body_md);
+      setTweakInstruction('');
+      toast.success('Revised — review the changes above.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Refine failed');
+    } finally {
+      setRefining(false);
     }
   }
 
@@ -200,6 +230,52 @@ export function ComposerForm({
               Tip: use <code className="rounded bg-muted px-1">{'{{contact.first_name}}'}</code> in the greeting so each recipient gets their own name.
             </p>
           </div>
+
+          {/* AI tweak box — only useful once there's a draft to refine */}
+          {body && (
+            <div className="space-y-1.5 rounded-lg border border-mx-100 bg-mx-50/40 p-3">
+              <div className="flex items-center gap-1.5">
+                <Wand2 className="h-3.5 w-3.5 text-mx-600" />
+                <Label htmlFor="tweak" className="text-sm font-semibold">
+                  Tweak with AI
+                </Label>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Tell Claude what to change about the draft above. It will keep your
+                personalizations + research context, just apply the change.
+              </p>
+              <Textarea
+                id="tweak"
+                value={tweakInstruction}
+                onChange={(e) => setTweakInstruction(e.target.value)}
+                placeholder={'e.g. "Make it shorter — under 70 words" / "More casual, drop the founded-1988 line" / "Add that we have excess capacity right now and could turn samples in 2 weeks" / "Less aggressive on tariffs — make it about lead time"'}
+                className="min-h-[64px] text-sm"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={refine}
+                  disabled={refining || !tweakInstruction.trim()}
+                >
+                  {refining ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Revising…
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="h-3.5 w-3.5" /> Revise with this change
+                    </>
+                  )}
+                </Button>
+                {tweakInstruction && !refining && (
+                  <Button variant="ghost" size="sm" onClick={() => setTweakInstruction('')}>
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Signature preview — auto-appended to every send. Read-only. */}
           {body && (

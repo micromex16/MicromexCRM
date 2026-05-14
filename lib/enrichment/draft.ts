@@ -14,6 +14,14 @@ export interface DraftArgs {
   /** If true, persist as a queued `sends` row. Otherwise return without storing. */
   persist?: boolean;
   campaignId?: string;
+  /**
+   * Optional: refine an existing draft instead of starting fresh.
+   * When set with currentSubject + currentBody, Claude edits the existing
+   * draft per the tweak instruction instead of regenerating from template.
+   */
+  tweakInstruction?: string;
+  currentSubject?: string;
+  currentBody?: string;
 }
 
 export async function draftEmail(args: DraftArgs): Promise<DraftResult> {
@@ -124,7 +132,21 @@ Strategic intel:
 ${switchingTriggers}
   - Buying committee: ${intel.buying_committee_titles?.join(', ') ?? '(unknown)'}`;
 
-  const userPrompt = DRAFT_PROMPT
+  // Choose draft vs refine mode based on whether the caller passed a current
+  // draft to edit.
+  const isRefine = Boolean(
+    args.tweakInstruction && args.currentBody && args.currentSubject,
+  );
+  const promptTemplate = isRefine ? REFINE_PROMPT : DRAFT_PROMPT;
+  const tweakBlock = args.tweakInstruction
+    ? `==============================================================================
+ADDITIONAL INSTRUCTIONS FROM ${senderName.toUpperCase()} FOR THIS DRAFT
+(these override anything above):
+
+${args.tweakInstruction}`
+    : '';
+
+  const userPrompt = promptTemplate
     .replace('{{contact.first_name}}', ct.first_name ?? 'there')
     .replace('{{contact.last_name}}', ct.last_name ?? '')
     .replace('{{contact.title}}', ct.title ?? '')
@@ -136,13 +158,17 @@ ${switchingTriggers}
     .replace('{{company_founded_year}}', foundedYear)
     .replace('{{company_certifications}}', certifications)
     .replace('{{company_facilities}}', facilities)
-    .replace('{{company_pitch}}', companyPitch);
+    .replace('{{company_pitch}}', companyPitch)
+    .replace('{{tweak_block}}', tweakBlock)
+    .replace('{{current_subject}}', args.currentSubject ?? '')
+    .replace('{{current_body}}', args.currentBody ?? '')
+    .replace('{{tweak_instruction}}', args.tweakInstruction ?? '');
 
   const client = anthropic();
   const msg = await client.messages.create({
     model: CLAUDE_MODELS.research,
-    max_tokens: 1000,
-    temperature: 0.4,
+    max_tokens: 1200,
+    temperature: 0.5,
     messages: [{ role: 'user', content: userPrompt }],
   });
 
@@ -187,16 +213,26 @@ ${switchingTriggers}
 
 const DRAFT_PROMPT = `Today's date: {{today_date}}.
 
-Draft a cold first-touch email from a Micromex BD rep to {{contact.first_name}}
-{{contact.last_name}}, {{contact.title}} at {{company.name}}.
+You are writing as {{sender_name}} — the OWNER/PRESIDENT of Micromex. This is
+not a templated outbound from a sales rep. It's a personal note from the
+owner of a manufacturing company to a peer who he thinks might be a good
+fit. Voice should be HIS — first-person, conversational, low-key, NOT
+salesy.
+
+Recipient: {{contact.first_name}} {{contact.last_name}}, {{contact.title}}
+at {{company.name}}.
 
 ==============================================================================
-ABOUT MICROMEX (use these as credibility — at least one MUST appear in the
-body, ideally founding year + a certification):
+ABOUT MICROMEX (weave at least one naturally — founding year + a cert are
+the strongest credibility signals; the "owner reaching out" angle is the
+second strongest):
   - Founded {{company_founded_year}}
   - Certifications: {{company_certifications}}
   - Facilities: {{company_facilities}}
   - {{company_pitch}}
+  - {{sender_name}} is the owner — somewhere in the email, signal that
+    you can move quickly on quotes / capacity / scheduling because you're
+    the decision-maker, not a junior rep routing internally.
 
 ==============================================================================
 {{lead_context}}
@@ -217,38 +253,93 @@ makes weighted blankets, your email must talk about weighted blankets, not
 hardware. If the template says "toys" but this lead does premium pet
 accessories, talk about pet accessories.
 
-Template:
+Template (for ANGLE reference only):
 {{template.body_md}}
 
 ==============================================================================
-RULES:
-  - PERSONALIZATION IS THE #1 PRIORITY. The email must read like it was
-    written for {{company.name}} specifically. Every product noun should be
-    THEIR product line, not the template's. If you can't tell what they
-    make from the lead context, say "your team" or "your product line" —
-    don't invent products.
-  - Body should specifically reference: their actual product category, and
-    at least one signal from their shipment data / research brief (current
-    vendor guess, switching trigger, or industry-specific pain point).
-  - Subject: max 6 words, in the style of the template's subject. Replace
-    the template's example product noun with their actual product noun.
-  - Opening line: match the template's opening STYLE (capability-led vs
-    tariff-math-led vs recovery-math-led), but the words/products must be
-    about THIS company.
-  - Include AT LEAST ONE company credibility signal from "ABOUT MICROMEX" —
-    weave it naturally ("ISO 9001-certified shop running since 1988…"),
-    not as a bulleted list.
-  - Include ONE specific Micromex proof point appropriate to the capability:
-      electrical -> harness/cord-set track record
+TONE — this is the most important section. The email must feel HUMAN, not
+templated:
+
+  - First person ("I", "I've", "I run", "I'm reaching out") — not "we".
+    {{sender_name}} is writing this himself.
+  - Frame the outreach as a FIT OPPORTUNITY, not a sales pitch. Something
+    like "I came across {{company.name}} and what you're doing in <their
+    product area> looks like a good fit for what we do." Not "We can help
+    you save money on tariffs."
+  - Tariffs are a downside they may or may not feel — DO NOT lead with
+    tariff numbers or scare tactics. Reference tariffs / Section 301 only
+    if the template explicitly leads with that angle. Otherwise mention
+    USMCA / lead-time / capacity as the positive frame.
+  - Mention {{sender_name}} is the owner. One short line is enough:
+    "I'm the owner here — happy to put a quote together quickly if it
+    looks like a fit." Or similar in his voice.
+  - Conversational, like one founder emailing another. Slightly informal.
+    Contractions OK ("we're", "I've", "doesn't"). Avoid corporate-speak
+    ("synergies", "leverage", "value-add"). Avoid "circling back",
+    "touching base", "I hope this finds you well".
+  - It should read like {{sender_name}} thought about this lead for 2-3
+    minutes and dashed off a quick note, not like a marketing sequence.
+
+==============================================================================
+RULES (concrete):
+  - PERSONALIZATION IS REQUIRED. The email must reference {{company.name}}'s
+    ACTUAL product category — not the template's example products. If you
+    don't know what they make from the lead context, fall back to "your
+    product line" or "your team" — don't invent products.
+  - One specific Micromex proof point appropriate to the capability bucket:
+      electrical -> harness / cord-set / wound magnetics track record
       refurb     -> "Terra Kaffe" reference customer (premium home espresso)
       packaging  -> hand-pack / retail-ready / kitting volume
       mechanical -> same-day truck to Phoenix / labor advantage
-  - CTA: ask for a 20-minute call next week, propose two concrete time
-    slots relative to today's date.
-  - No emojis, no "I hope this finds you well", no "circling back".
+  - Subject: max 7 words. Conversational. Lowercase if it feels natural.
+    Examples in good voice:
+      "fit on <their product> sub-assembly?"
+      "quick note from one owner to another"
+      "<company name> + USMCA — worth a quick chat?"
+  - Opening line: NEVER "I hope this finds you well." Start with the fit
+    observation: "I came across {{company.name}}…" / "Saw {{company.name}}'s
+    work on <product>…" / "Quick note — your team's making <product> and
+    I think we'd be a strong fit on the manufacturing side."
+  - CTA: 20-minute call next week. Two concrete time slots relative to
+    today. Keep it light: "Tuesday afternoon or Thursday morning?" not
+    "Please schedule a 30-minute discovery session."
   - DO NOT add any sign-off, name, or signature at the end. The body must
-    end with the CTA (the meeting request). A signature block is appended
-    downstream automatically — do not include one.
-  - Max 110 words total in the body.
+    end with the CTA. A signature block is appended downstream.
+  - 90-130 words. Brevity matters more than completeness.
+
+{{tweak_block}}
+
+Output strict JSON only: { "subject": "...", "body_md": "..." }`;
+
+const REFINE_PROMPT = `Today's date: {{today_date}}.
+
+You are {{sender_name}}, owner of Micromex. You already have a draft email
+to {{contact.first_name}} {{contact.last_name}} at {{company.name}}. Apply
+the requested change and return the revised email.
+
+==============================================================================
+CONTEXT ABOUT THE LEAD (do not lose specifics from the current draft —
+this is here so you can keep personalizations correct if you rewrite):
+{{lead_context}}
+
+==============================================================================
+CURRENT DRAFT
+Subject: {{current_subject}}
+
+{{current_body}}
+
+==============================================================================
+THE CHANGE TO APPLY:
+{{tweak_instruction}}
+
+==============================================================================
+RULES (still apply):
+  - First-person owner voice. Conversational, not salesy.
+  - DO NOT add a sign-off or signature at the end — a block is appended
+    downstream.
+  - 90-130 words unless the tweak asks otherwise.
+  - No emojis, no "I hope this finds you well", no "circling back".
+  - Preserve the personalization (company name, product references) from
+    the current draft unless the tweak explicitly says to change them.
 
 Output strict JSON only: { "subject": "...", "body_md": "..." }`;
