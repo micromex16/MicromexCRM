@@ -117,9 +117,25 @@ export function AddLeadsDialog({ campaignId }: { campaignId: string }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      toast.success(`Added ${json.companies_added} companies — ${json.queued} drafts queued`, {
-        description: json.skipped > 0 ? `${json.skipped} contacts skipped (no email or unsubscribed)` : undefined,
-      });
+      const inline = json.drafted_inline ?? 0;
+      const later = json.queued_for_later ?? 0;
+      const skip = json.skipped ?? 0;
+      const fail = json.draft_failed ?? 0;
+      const parts: string[] = [];
+      if (inline > 0) parts.push(`${inline} drafted now`);
+      if (later > 0) parts.push(`${later} more on next cron`);
+      if (skip > 0) parts.push(`${skip} skipped (no email / unsubscribed)`);
+      if (fail > 0) parts.push(`${fail} failed`);
+      const headline = `Added ${json.companies_added} compan${json.companies_added === 1 ? 'y' : 'ies'}`;
+      if (inline > 0 || later > 0) {
+        toast.success(headline, {
+          description: parts.join(' · ') || undefined,
+        });
+      } else {
+        toast.error(`${headline} but nothing drafted`, {
+          description: parts.join(' · ') || 'No emailable contacts at the selected companies.',
+        });
+      }
       setOpen(false);
       setSelected(new Set());
       router.refresh();

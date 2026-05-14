@@ -2,9 +2,15 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { enqueue } from '@/lib/jobs';
+import { draftEmail } from '@/lib/enrichment/draft';
 import type { CapabilityBucket } from '@/lib/types/domain';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
+
+// How long to spend drafting inline before bailing to the queue.
+const DEADLINE_MS = 50_000;
+const PARALLEL = 3;
 
 const Body = z.object({
   company_ids: z.array(z.string().uuid()).min(1).max(200),
@@ -155,48 +161,87 @@ export async function POST(request: NextRequest, ctx: { params: { id: string } }
     .in('company_id', parsed.data.company_ids);
 
   type ContactRow = { id: string; company_id: string; email: string | null; unsubscribed: boolean };
-  const contacts = (contactsData ?? []) as ContactRow[];
+  const rawContacts = (contactsData ?? []) as ContactRow[];
+  const contacts = rawContacts.filter((ct) => ct.email && !ct.unsubscribed);
+  const skipped = rawContacts.length - contacts.length;
 
-  let queued = 0;
-  let skipped = 0;
-  for (const ct of contacts) {
-    if (!ct.email || ct.unsubscribed) {
-      skipped++;
-      continue;
+  const startedAt = Date.now();
+  let drafted_inline = 0;
+  let draft_failed = 0;
+  let queued_for_later = 0;
+  const errors: string[] = [];
+
+  // Process in parallel batches until we run out of time budget. Anything
+  // left over is enqueued for the run-enrichment cron.
+  const todo = [...contacts];
+  while (todo.length > 0 && Date.now() - startedAt < DEADLINE_MS - 15_000) {
+    const batch = todo.splice(0, PARALLEL);
+    const results = await Promise.allSettled(
+      batch.map((ct) =>
+        draftEmail({
+          contactId: ct.id,
+          templateId: c.template_id!,
+          persist: true,
+          campaignId: c.id,
+        }),
+      ),
+    );
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === 'fulfilled') {
+        drafted_inline++;
+      } else {
+        draft_failed++;
+        const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        errors.push(`${batch[i].id}: ${msg}`);
+      }
     }
+  }
+
+  // Anything left went over the time budget — enqueue for the cron.
+  for (const ct of todo) {
     try {
       await enqueue({
         targetType: 'contact',
         targetId: ct.id,
         jobType: 'draft_email',
         priority: 5,
-        metadata: { template_id: c.template_id, campaign_id: c.id },
+        metadata: { template_id: c.template_id!, campaign_id: c.id },
       });
-      queued++;
+      queued_for_later++;
     } catch {
-      skipped++;
+      draft_failed++;
     }
   }
 
   // Bump the campaign's target counter + flip to live if it was draft
+  const totalAdded = drafted_inline + queued_for_later;
   const updates: Record<string, unknown> = {};
-  if (c.status === 'draft' && queued > 0) {
+  if (c.status === 'draft' && totalAdded > 0) {
     updates.status = 'live';
     updates.starts_at = new Date().toISOString();
   }
   if (Object.keys(updates).length > 0) {
     await adminDb.from('campaigns').update(updates as never).eq('id', c.id);
   }
-  // total_targets is incrementally tracked
-  if (queued > 0) {
+  if (totalAdded > 0) {
     const { data: cur } = await adminDb
       .from('campaigns')
       .select('total_targets')
       .eq('id', c.id)
       .single();
-    const next = ((cur as { total_targets: number | null } | null)?.total_targets ?? 0) + queued;
+    const next = ((cur as { total_targets: number | null } | null)?.total_targets ?? 0) + totalAdded;
     await adminDb.from('campaigns').update({ total_targets: next } as never).eq('id', c.id);
   }
 
-  return NextResponse.json({ ok: true, queued, skipped, companies_added: parsed.data.company_ids.length });
+  return NextResponse.json({
+    ok: true,
+    companies_added: parsed.data.company_ids.length,
+    contacts_total: rawContacts.length,
+    drafted_inline,
+    queued_for_later,
+    skipped,
+    draft_failed,
+    errors: errors.slice(0, 5),
+  });
 }
