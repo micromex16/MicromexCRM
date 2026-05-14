@@ -8,6 +8,7 @@ const VARIANTS: Record<LeadStatus, 'default' | 'secondary' | 'muted' | 'success'
   contacted: 'default',
   replied: 'success',
   meeting: 'success',
+  quoted: 'hot',
   closed_won: 'success',
   closed_lost: 'destructive',
   disqualified: 'muted',

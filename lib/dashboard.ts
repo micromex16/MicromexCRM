@@ -45,7 +45,7 @@ export async function loadDashboard(): Promise<DashboardData> {
   const [companies, sendsRecent, sendsForChart, hot, discoverySummary] = await Promise.all([
     supabase
       .from('companies')
-      .select('id, status, industry_segment, fit_score, research_intelligence_json'),
+      .select('id, status, industry_segment, fit_score, research_intelligence_json, deal_value_usd'),
     supabase
       .from('sends')
       .select('status, sent_at, replied_at')
@@ -64,6 +64,7 @@ export async function loadDashboard(): Promise<DashboardData> {
     industry_segment: string | null;
     fit_score: number | null;
     research_intelligence_json: { estimated_annual_spend_usd?: { low?: number; high?: number } } | null;
+    deal_value_usd: number | null;
   }>;
   const recent = (sendsRecent.data ?? []) as Array<{ status: string; sent_at: string | null; replied_at: string | null }>;
 
@@ -77,10 +78,18 @@ export async function loadDashboard(): Promise<DashboardData> {
   const winRate =
     closedWon + closedLost === 0 ? 0 : Math.round((closedWon / (closedWon + closedLost)) * 100);
 
-  // Pipeline estimate = fit_score-weighted sum of midpoint annual spend, for non-closed leads.
+  // Pipeline value:
+  //   - If a lead has a manually-set deal_value_usd, use it directly.
+  //   - Otherwise fall back to a fit_score-weighted estimate from Claude's
+  //     research_intelligence_json.estimated_annual_spend_usd midpoint.
   let pipelineEstimateUsd = 0;
   for (const c of all) {
-    if (['closed_won', 'closed_lost', 'disqualified'].includes(c.status)) continue;
+    if (['closed_lost', 'disqualified'].includes(c.status)) continue;
+    if (c.deal_value_usd && c.deal_value_usd > 0) {
+      pipelineEstimateUsd += c.deal_value_usd;
+      continue;
+    }
+    if (c.status === 'closed_won') continue; // skip auto-estimate for won w/o explicit value
     const lo = c.research_intelligence_json?.estimated_annual_spend_usd?.low ?? 0;
     const hi = c.research_intelligence_json?.estimated_annual_spend_usd?.high ?? 0;
     const mid = (lo + hi) / 2;

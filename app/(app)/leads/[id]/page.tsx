@@ -12,6 +12,7 @@ import { ResearchIntel } from '@/components/leads/research-intel';
 import { ActivityTimeline, type ActivityRow } from '@/components/leads/activity-timeline';
 import { LeadActions } from '@/components/leads/lead-actions';
 import { EmailThread, type ThreadSend, type ThreadContact } from '@/components/leads/email-thread';
+import { PipelineControls } from '@/components/leads/pipeline-controls';
 import { createClient } from '@/lib/supabase/server';
 import { initials } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -45,6 +46,9 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
     source: string | null;
     created_at: string;
     last_activity_at: string | null;
+    deal_value_usd: number | null;
+    quote_sent_at: string | null;
+    pipeline_notes: string | null;
   };
 
   const [contactsRes, shipmentsRes, activitiesRes, sendsRes] = await Promise.all([
@@ -363,6 +367,13 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
         </div>
 
         <div className="order-1 space-y-4 lg:order-2">
+          <PipelineControls
+            leadId={c.id}
+            initialStatus={c.status}
+            initialDealValue={c.deal_value_usd}
+            initialNotes={c.pipeline_notes}
+            initialQuoteSentAt={c.quote_sent_at}
+          />
           <LeadActions leadId={c.id} />
         </div>
       </div>

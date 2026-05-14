@@ -24,6 +24,7 @@ export type LeadStatus =
   | 'contacted'
   | 'replied'
   | 'meeting'
+  | 'quoted'
   | 'closed_won'
   | 'closed_lost'
   | 'disqualified';
@@ -35,6 +36,7 @@ export const STATUS_ORDER: LeadStatus[] = [
   'contacted',
   'replied',
   'meeting',
+  'quoted',
   'closed_won',
   'closed_lost',
   'disqualified',
@@ -47,9 +49,34 @@ export const STATUS_LABELS: Record<LeadStatus, string> = {
   contacted: 'Contacted',
   replied: 'Replied',
   meeting: 'Meeting',
+  quoted: 'Quoted',
   closed_won: 'Closed (won)',
   closed_lost: 'Closed (lost)',
   disqualified: 'Disqualified',
+};
+
+/** Higher-level grouping for at-a-glance pipeline temperature. */
+export type Temperature = 'cold' | 'warm' | 'hot' | 'won' | 'lost';
+
+export const TEMPERATURE_BY_STATUS: Record<LeadStatus, Temperature> = {
+  new: 'cold',
+  researching: 'cold',
+  qualified: 'cold',
+  contacted: 'cold',
+  replied: 'warm',
+  meeting: 'hot',
+  quoted: 'hot',
+  closed_won: 'won',
+  closed_lost: 'lost',
+  disqualified: 'lost',
+};
+
+export const TEMPERATURE_LABELS: Record<Temperature, string> = {
+  cold: 'Cold',
+  warm: 'Warm',
+  hot: 'Hot',
+  won: 'Won',
+  lost: 'Lost',
 };
 
 export type ResearchIntelligence = {

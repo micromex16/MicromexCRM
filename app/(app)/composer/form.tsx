@@ -194,12 +194,56 @@ export function ComposerForm({
               id="body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              className="min-h-[320px]"
+              className="min-h-[280px]"
             />
             <p className="text-[11px] text-muted-foreground">
               Tip: use <code className="rounded bg-muted px-1">{'{{contact.first_name}}'}</code> in the greeting so each recipient gets their own name.
             </p>
           </div>
+
+          {/* Signature preview — auto-appended to every send. Read-only. */}
+          {body && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Auto-appended signature (preview)
+              </Label>
+              <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-xs leading-relaxed text-muted-foreground">
+                <div className="font-semibold text-foreground">Giovanni Garcin</div>
+                <div>President, Micromex</div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="inline-block rounded-sm bg-[#0A66C2] px-1 py-px text-[9px] font-bold text-white">
+                      in
+                    </span>
+                    <a
+                      href="https://www.linkedin.com/in/giovannigarcin/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#0A66C2] hover:underline"
+                    >
+                      LinkedIn
+                    </a>
+                  </span>
+                  <span>·</span>
+                  <a
+                    href="https://micromex.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-mx-600 hover:underline"
+                  >
+                    micromex.com
+                  </a>
+                </div>
+                <div className="mt-3 border-t pt-2 text-[10px]">
+                  Postal address + unsubscribe link added below (required for compliance).
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Configured via <code className="rounded bg-muted px-1">SIGNATURE_*</code> env vars.
+                Same block goes on every send.
+              </p>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             <Button onClick={send} disabled={sending || !subject || !body || selectedCount === 0}>
               {sending ? (
