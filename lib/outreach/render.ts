@@ -42,13 +42,39 @@ const FALLBACKS: Record<string, string> = {
 
 export function renderTemplate(input: RenderInput): RenderedEmail {
   const subject = applyTags(input.subject, input);
-  const bodyMd = applyTags(input.body, input);
+  let bodyMd = applyTags(input.body, input);
 
+  // Strip any trailing first-name sign-off Claude habitually adds
+  // ("Giovanni" / "— Giovanni" / "Best, Giovanni") — we append a proper
+  // signature block below instead.
+  bodyMd = stripTrailingSignoff(bodyMd);
+
+  const signature = renderSignature();
   const footer = renderFooter(input.sendId ?? null);
-  const body_text = `${bodyMd}\n\n${footer.text}`;
-  const body_html = `${mdToHtml(bodyMd)}\n${footer.html}`;
+  const body_text = `${bodyMd}\n\n${signature.text}\n\n${footer.text}`;
+  const body_html = `${mdToHtml(bodyMd)}\n${signature.html}\n${footer.html}`;
 
   return { subject, body_text, body_html };
+}
+
+function stripTrailingSignoff(body: string): string {
+  // Conservative: only strip if the LAST non-empty line is a short closing
+  // (e.g. just "Giovanni" or "— Giovanni" or "Best, Giovanni") — leaves
+  // longer trailing paragraphs alone.
+  const lines = body.split('\n');
+  let i = lines.length - 1;
+  while (i >= 0 && lines[i].trim() === '') i--;
+  if (i < 0) return body;
+  const last = lines[i].trim();
+  const SIGNOFF_RE =
+    /^(?:[—-]\s*)?(?:Thanks(?:[,!.])?|Best(?:[,!.])?|Cheers(?:[,!.])?|Best regards(?:[,!.])?|Regards(?:[,!.])?|Sincerely(?:[,!.])?)?\s*[—-]?\s*Giovanni(?:\s+(?:Garcin|Hernandez))?(?:,?\s+Micromex)?\.?$/i;
+  if (SIGNOFF_RE.test(last)) {
+    // also drop any blank line directly above
+    let cut = i;
+    while (cut > 0 && lines[cut - 1].trim() === '') cut--;
+    return lines.slice(0, cut).join('\n').replace(/\s+$/, '');
+  }
+  return body;
 }
 
 function applyTags(template: string, input: RenderInput): string {
@@ -94,6 +120,45 @@ function mdToHtml(md: string): string {
 
 const POSTAL_ADDRESS =
   'Micromex · 1234 N Stone Ave, Tucson AZ 85705, USA · Imuris, Sonora, MX · Est. 1988';
+
+function renderSignature(): { text: string; html: string } {
+  const name = process.env.RESEND_FROM_NAME ?? 'Giovanni Garcin';
+  const title = process.env.SIGNATURE_TITLE ?? 'President';
+  const company = process.env.SIGNATURE_COMPANY ?? 'Micromex';
+  const linkedin = process.env.SIGNATURE_LINKEDIN ?? 'https://www.linkedin.com/in/giovannigarcin/';
+  const website = process.env.SIGNATURE_WEBSITE ?? 'https://micromex.com';
+  const websiteLabel = website.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+  const text = `${name}\n${title}\n${company}\n${linkedin}\n${websiteLabel}`;
+
+  // Inline LinkedIn "in" badge (SVG-as-data-URL fallback) for clients that
+  // strip remote images. Most modern clients accept the hosted PNG too;
+  // we use a tiny PNG-style hosted icon and provide alt text.
+  const html = `<table cellpadding="0" cellspacing="0" border="0" style="font-family:-apple-system,Segoe UI,Inter,Arial,sans-serif">
+  <tr><td style="padding-top:16px">
+    <div style="font-size:14px;font-weight:600;color:#0A284C">${escape(name)}</div>
+    <div style="font-size:13px;color:#5b6b80;margin-top:1px">${escape(title)}, ${escape(company)}</div>
+    <div style="font-size:13px;margin-top:8px;line-height:1.5">
+      <a href="${escape(linkedin)}" style="color:#0A66C2;text-decoration:none;display:inline-block;vertical-align:middle" target="_blank" rel="noopener">
+        <span style="display:inline-block;background:#0A66C2;color:#ffffff;font-weight:700;font-size:11px;padding:2px 5px;border-radius:3px;vertical-align:middle;font-family:Arial,sans-serif;letter-spacing:0.5px">in</span>
+        <span style="vertical-align:middle;margin-left:6px">LinkedIn</span>
+      </a>
+      <span style="color:#cbd5e1;margin:0 8px">·</span>
+      <a href="${escape(website)}" style="color:#1F5BA8;text-decoration:none" target="_blank" rel="noopener">${escape(websiteLabel)}</a>
+    </div>
+  </td></tr>
+</table>`;
+
+  return { text, html };
+}
+
+function escape(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 function renderFooter(sendId: string | null): { text: string; html: string } {
   const appUrl = publicEnv.appUrl;

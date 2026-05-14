@@ -31,6 +31,12 @@ const schema = z.object({
 
   DAILY_SEND_CAP: z.coerce.number().int().positive().default(50),
   ENRICHMENT_BATCH_SIZE: z.coerce.number().int().positive().default(10),
+
+  // Email signature (appended to every outbound send)
+  SIGNATURE_TITLE: z.string().default('President'),
+  SIGNATURE_LINKEDIN: z.string().default('https://www.linkedin.com/in/giovannigarcin/'),
+  SIGNATURE_WEBSITE: z.string().default('https://micromex.com'),
+  SIGNATURE_COMPANY: z.string().default('Micromex'),
 });
 
 export type Env = z.infer<typeof schema>;

@@ -155,6 +155,8 @@ Constraints:
   - CTA: ask for a 20-minute call next week, propose two concrete time slots
     relative to today's date
   - No emojis, no "I hope this finds you well", no "circling back"
-  - End with: {{sender_name}}, Micromex (signature added downstream)
+  - DO NOT add any sign-off, name, or signature at the end. The body must
+    end with the CTA (the meeting request). A signature block is appended
+    downstream automatically — do not include one.
 
 Output JSON: { "subject": "...", "body_md": "..." }`;
