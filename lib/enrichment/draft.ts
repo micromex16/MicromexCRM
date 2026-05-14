@@ -75,6 +75,15 @@ export async function draftEmail(args: DraftArgs): Promise<DraftResult> {
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const senderName = process.env.RESEND_FROM_NAME ?? 'Giovanni Garcin';
+  const foundedYear = process.env.COMPANY_FOUNDED_YEAR ?? '1988';
+  const certifications =
+    process.env.COMPANY_CERTIFICATIONS ?? 'ISO 9001:2015, IMMEX-registered';
+  const facilities =
+    process.env.COMPANY_FACILITIES ?? 'Tucson, AZ HQ + Imuris, Sonora production facility';
+  const companyPitch =
+    process.env.COMPANY_PITCH ??
+    'USMCA-qualifying contract manufacturer — same-day truck to Phoenix, no Section 301 exposure';
+
   const userPrompt = DRAFT_PROMPT
     .replace('{{contact.first_name}}', ct.first_name ?? 'there')
     .replace('{{contact.last_name}}', ct.last_name ?? '')
@@ -86,7 +95,11 @@ export async function draftEmail(args: DraftArgs): Promise<DraftResult> {
       co.research_intelligence_json?.opening_hook ?? '(use a shipment fact)',
     )
     .replace('{{today_date}}', todayStr)
-    .replace('{{sender_name}}', senderName);
+    .replace('{{sender_name}}', senderName)
+    .replace('{{company_founded_year}}', foundedYear)
+    .replace('{{company_certifications}}', certifications)
+    .replace('{{company_facilities}}', facilities)
+    .replace('{{company_pitch}}', companyPitch);
 
   const client = anthropic();
   const msg = await client.messages.create({
@@ -140,6 +153,13 @@ const DRAFT_PROMPT = `Today's date: {{today_date}}.
 Draft a cold first-touch email from a Micromex BD rep to {{contact.first_name}}
 {{contact.last_name}}, {{contact.title}} at {{company.name}}.
 
+About Micromex (use these as credibility — at least one MUST appear in the
+body, ideally the founding year + a certification):
+  - Founded {{company_founded_year}}
+  - Certifications: {{company_certifications}}
+  - Facilities: {{company_facilities}}
+  - {{company_pitch}}
+
 THE TEMPLATE BELOW DEFINES THE ANGLE OF THIS EMAIL — you must preserve it.
 The template's opening line, body focus, and proof point are the angle.
 Rewrite for plain conversational English using this lead's specifics, but
@@ -164,11 +184,15 @@ Rules:
   - Body: stay within the template's angle. You may personalize with the
     lead's product line or origin country, but don't graft on a tariff
     angle if the template is capability-led, or vice versa.
-  - Use ONE specific proof point appropriate to the capability:
-      electrical -> "founded 1988" + harness/cord-set track record
+  - Include AT LEAST ONE company credibility signal from the "About Micromex"
+    block — the founding year + a certification are the strongest. Weave
+    them naturally ("ISO 9001-certified shop running since 1988…", not a
+    bulleted list of facts).
+  - Add ONE specific proof point appropriate to the capability:
+      electrical -> harness/cord-set track record
       refurb     -> "Terra Kaffe" reference customer
       packaging  -> hand-pack / retail-ready / kitting volume
-      mechanical -> "founded 1988" + same-day truck to Phoenix
+      mechanical -> same-day truck to Phoenix / labor advantage
   - CTA: ask for a 20-minute call next week, propose two concrete time
     slots relative to today's date.
   - No emojis, no "I hope this finds you well", no "circling back".

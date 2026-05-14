@@ -37,6 +37,17 @@ const schema = z.object({
   SIGNATURE_LINKEDIN: z.string().default('https://www.linkedin.com/in/giovannigarcin/'),
   SIGNATURE_WEBSITE: z.string().default('https://micromex.com'),
   SIGNATURE_COMPANY: z.string().default('Micromex'),
+
+  // Company facts used by the draft prompt to ground every email in real
+  // credibility signals (cert, founding year, USMCA, etc.)
+  COMPANY_FOUNDED_YEAR: z.coerce.number().int().default(1988),
+  COMPANY_CERTIFICATIONS: z.string().default('ISO 9001:2015, IMMEX-registered'),
+  COMPANY_FACILITIES: z.string().default('Tucson, AZ HQ + Imuris, Sonora production facility'),
+  COMPANY_PITCH: z
+    .string()
+    .default(
+      'USMCA-qualifying contract manufacturer — same-day truck to Phoenix, no Section 301 exposure',
+    ),
 });
 
 export type Env = z.infer<typeof schema>;
