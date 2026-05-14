@@ -11,28 +11,99 @@ import type { CapabilityBucket } from '@/lib/types/domain';
 
 export const dynamic = 'force-dynamic';
 
+interface CampaignRow {
+  id: string;
+  name: string;
+  capability_bucket: CapabilityBucket;
+  status: 'draft' | 'live' | 'paused' | 'complete';
+  total_targets: number | null;
+  daily_send_cap: number;
+  send_mode: 'auto' | 'manual_review';
+  created_at: string;
+}
+
+interface SendCountRow {
+  campaign_id: string | null;
+  status: string;
+  sent_at: string | null;
+  replied_at: string | null;
+  bounced_at: string | null;
+  opened_at: string | null;
+}
+
+interface JobCountRow {
+  metadata_json: { campaign_id?: string } | null;
+}
+
+interface Live {
+  drafting: number;
+  queued: number;
+  sent: number;
+  replied: number;
+  bounced: number;
+  failed: number;
+  opened: number;
+}
+
 export default async function CampaignsPage() {
   const supabase = createClient();
-  const { data } = await supabase
-    .from('campaigns')
-    .select('id, name, capability_bucket, status, total_targets, total_sent, total_replied, daily_send_cap, send_mode, created_at')
-    .order('created_at', { ascending: false });
 
-  const rows = (data ?? []) as Array<{
-    id: string;
-    name: string;
-    capability_bucket: CapabilityBucket;
-    status: 'draft' | 'live' | 'paused' | 'complete';
-    total_targets: number | null;
-    total_sent: number | null;
-    total_replied: number | null;
-    daily_send_cap: number;
-    send_mode: 'auto' | 'manual_review';
-    created_at: string;
-  }>;
+  // Pull campaigns + a single sweep of all sends (we'll aggregate live in JS).
+  // Plus pending draft_email jobs for the per-campaign drafting count.
+  const [campaignsRes, sendsRes, pendingJobsRes] = await Promise.all([
+    supabase
+      .from('campaigns')
+      .select('id, name, capability_bucket, status, total_targets, daily_send_cap, send_mode, created_at')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('sends')
+      .select('campaign_id, status, sent_at, replied_at, bounced_at, opened_at')
+      .not('campaign_id', 'is', null),
+    supabase
+      .from('enrichment_jobs')
+      .select('metadata_json')
+      .eq('job_type', 'draft_email')
+      .eq('status', 'pending'),
+  ]);
+
+  const campaigns = (campaignsRes.data ?? []) as CampaignRow[];
+  const sends = (sendsRes.data ?? []) as SendCountRow[];
+  const pendingJobs = (pendingJobsRes.data ?? []) as JobCountRow[];
+
+  // Aggregate counts per campaign_id
+  const liveByCampaign = new Map<string, Live>();
+  for (const c of campaigns) {
+    liveByCampaign.set(c.id, {
+      drafting: 0,
+      queued: 0,
+      sent: 0,
+      replied: 0,
+      bounced: 0,
+      failed: 0,
+      opened: 0,
+    });
+  }
+  for (const s of sends) {
+    if (!s.campaign_id) continue;
+    const live = liveByCampaign.get(s.campaign_id);
+    if (!live) continue;
+    if (s.status === 'queued' || s.status === 'manual_hold') live.queued++;
+    if (s.sent_at) live.sent++;
+    if (s.opened_at) live.opened++;
+    if (s.replied_at || s.status === 'replied') live.replied++;
+    if (s.bounced_at || s.status === 'bounced') live.bounced++;
+    if (s.status === 'failed') live.failed++;
+  }
+  for (const j of pendingJobs) {
+    const cid = j.metadata_json?.campaign_id;
+    if (!cid) continue;
+    const live = liveByCampaign.get(cid);
+    if (!live) continue;
+    live.drafting++;
+  }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <div className="flex items-end justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight">Campaigns</h1>
@@ -47,7 +118,7 @@ export default async function CampaignsPage() {
         </Button>
       </div>
 
-      {rows.length === 0 ? (
+      {campaigns.length === 0 ? (
         <EmptyState
           icon={Send}
           title="No campaigns yet"
@@ -55,12 +126,18 @@ export default async function CampaignsPage() {
           action={{ label: 'New campaign', href: '/campaigns/new' }}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {rows.map((c) => {
-            const replyRate =
-              (c.total_sent ?? 0) === 0
-                ? 0
-                : Math.round(((c.total_replied ?? 0) / (c.total_sent ?? 1)) * 100);
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {campaigns.map((c) => {
+            const live = liveByCampaign.get(c.id) ?? {
+              drafting: 0,
+              queued: 0,
+              sent: 0,
+              replied: 0,
+              bounced: 0,
+              failed: 0,
+              opened: 0,
+            };
+            const replyRate = live.sent === 0 ? 0 : Math.round((live.replied / live.sent) * 100);
             return (
               <Card key={c.id} className="transition-shadow hover:shadow-md">
                 <CardHeader>
@@ -71,7 +148,7 @@ export default async function CampaignsPage() {
                           {c.name}
                         </Link>
                       </CardTitle>
-                      <CardDescription className="mt-1 flex items-center gap-2">
+                      <CardDescription className="mt-1 flex flex-wrap items-center gap-2">
                         <CapabilityBadge bucket={c.capability_bucket} />
                         <span>·</span>
                         <span>{c.send_mode === 'auto' ? 'Auto-send' : 'Manual review'}</span>
@@ -81,11 +158,19 @@ export default async function CampaignsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {/* Pipeline stats row */}
                   <div className="grid grid-cols-4 gap-3 border-t pt-4 text-center text-xs">
                     <Stat label="Targets" value={c.total_targets ?? 0} />
-                    <Stat label="Sent" value={c.total_sent ?? 0} />
-                    <Stat label="Replied" value={c.total_replied ?? 0} />
+                    <Stat label="Sent" value={live.sent} />
+                    <Stat label="Replied" value={live.replied} />
                     <Stat label="Reply %" value={`${replyRate}%`} accent />
+                  </div>
+                  {/* Secondary row — what's in motion / what's stuck */}
+                  <div className="mt-2 grid grid-cols-4 gap-3 border-t pt-2 text-center text-[10px]">
+                    <SmallStat label="Drafting" value={live.drafting} tone={live.drafting > 0 ? 'amber' : 'muted'} />
+                    <SmallStat label="Queued" value={live.queued} tone={live.queued > 0 ? 'mx' : 'muted'} />
+                    <SmallStat label="Bounced" value={live.bounced} tone={live.bounced > 0 ? 'destructive' : 'muted'} />
+                    <SmallStat label="Failed" value={live.failed} tone={live.failed > 0 ? 'destructive' : 'muted'} />
                   </div>
                   <div className="mt-3 text-xs text-muted-foreground">
                     Started {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })} ·
@@ -108,6 +193,31 @@ function Stat({ label, value, accent }: { label: string; value: number | string;
         {value}
       </div>
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+function SmallStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: 'amber' | 'mx' | 'destructive' | 'muted';
+}) {
+  const colorClass =
+    tone === 'amber'
+      ? 'text-amber-700'
+      : tone === 'mx'
+        ? 'text-mx-600'
+        : tone === 'destructive'
+          ? 'text-destructive'
+          : 'text-muted-foreground';
+  return (
+    <div>
+      <div className={`font-display text-sm font-semibold ${colorClass}`}>{value}</div>
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
     </div>
   );
 }
