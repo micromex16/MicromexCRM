@@ -140,23 +140,41 @@ const DRAFT_PROMPT = `Today's date: {{today_date}}.
 Draft a cold first-touch email from a Micromex BD rep to {{contact.first_name}}
 {{contact.last_name}}, {{contact.title}} at {{company.name}}.
 
-Use this template as the structural frame (do not just fill blanks — rewrite
-in plain conversational English, max 110 words, no marketing voice):
+THE TEMPLATE BELOW DEFINES THE ANGLE OF THIS EMAIL — you must preserve it.
+The template's opening line, body focus, and proof point are the angle.
+Rewrite for plain conversational English using this lead's specifics, but
+do NOT substitute a different angle than the template uses.
 
+Template (this is the angle — match it):
 {{template.body_md}}
 
-Constraints:
-  - Subject line: max 6 words, references a specific fact from their business
-  - Opening line: must reference {{research_intelligence_json.opening_hook}}
-    or a specific shipment / product they sell
-  - Body: name the Micromex capability, name the tariff or logistics angle,
-    one specific proof point (Terra Kaffe for refurb, "founded 1988" for
-    credibility, "same-day truck to Phoenix" for logistics)
-  - CTA: ask for a 20-minute call next week, propose two concrete time slots
-    relative to today's date
-  - No emojis, no "I hope this finds you well", no "circling back"
+Lead context you may weave in (use only if it fits the template's angle —
+do NOT graft on a different angle to use these facts):
+  - Opening hook from research: {{research_intelligence_json.opening_hook}}
+
+Rules:
+  - Subject: max 6 words. Stay in the style of the template's subject.
+    If the template subject is "{{company.name}} + harnesses out of Mexico?",
+    your subject should be similar (capability-framed). If it's
+    "tariff math for {{company.name}}", yours should be math-framed.
+  - Opening line: MATCH the template's opening style. If the template opens
+    with "We do X" (capability lead), open with "We" — do NOT pivot to
+    "Noticed you import...". If the template opens with "Quick number" or
+    "If you're importing" (tariff math), open with the number/math angle.
+  - Body: stay within the template's angle. You may personalize with the
+    lead's product line or origin country, but don't graft on a tariff
+    angle if the template is capability-led, or vice versa.
+  - Use ONE specific proof point appropriate to the capability:
+      electrical -> "founded 1988" + harness/cord-set track record
+      refurb     -> "Terra Kaffe" reference customer
+      packaging  -> hand-pack / retail-ready / kitting volume
+      mechanical -> "founded 1988" + same-day truck to Phoenix
+  - CTA: ask for a 20-minute call next week, propose two concrete time
+    slots relative to today's date.
+  - No emojis, no "I hope this finds you well", no "circling back".
   - DO NOT add any sign-off, name, or signature at the end. The body must
     end with the CTA (the meeting request). A signature block is appended
     downstream automatically — do not include one.
+  - Max 110 words total in the body.
 
-Output JSON: { "subject": "...", "body_md": "..." }`;
+Output strict JSON only: { "subject": "...", "body_md": "..." }`;
