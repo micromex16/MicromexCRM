@@ -93,7 +93,15 @@ export function ComposerForm({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      toast.success('Queued — will send on the next cron tick.');
+      if (json.status === 'sent') {
+        toast.success('Sent ✉', {
+          description: json.resend_message_id ? `Resend ID: ${json.resend_message_id}` : undefined,
+        });
+      } else if (json.status === 'skipped_suppressed') {
+        toast.error('Skipped — contact is on the suppression list');
+      } else {
+        toast.error('Send failed', { description: json.error ?? 'unknown' });
+      }
       setSubject('');
       setBody('');
     } catch (e) {

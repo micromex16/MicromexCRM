@@ -1,8 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { sendOne } from '@/lib/outreach/send';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const Body = z.object({
   contact_id: z.string().uuid(),
@@ -34,7 +36,8 @@ export async function POST(request: NextRequest) {
   if (c.unsubscribed) return NextResponse.json({ error: 'contact_unsubscribed' }, { status: 400 });
   if (!c.email) return NextResponse.json({ error: 'contact_no_email' }, { status: 400 });
 
-  const { data, error } = await supabase
+  // 1. Insert the send row as queued.
+  const { data: ins, error: insErr } = await supabase
     .from('sends')
     .insert({
       contact_id: c.id,
@@ -47,7 +50,28 @@ export async function POST(request: NextRequest) {
     } as never)
     .select('id')
     .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, send_id: (data as { id: string }).id });
+  const sendId = (ins as { id: string }).id;
+
+  // 2. Send it synchronously now — don't wait for the daily cron.
+  try {
+    const outcome = await sendOne(sendId);
+    return NextResponse.json({
+      ok: outcome.status === 'sent',
+      send_id: sendId,
+      status: outcome.status,
+      resend_message_id: outcome.resend_message_id,
+      error: outcome.error,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      {
+        ok: false,
+        send_id: sendId,
+        error: e instanceof Error ? e.message : String(e),
+      },
+      { status: 500 },
+    );
+  }
 }
