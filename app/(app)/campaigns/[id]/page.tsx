@@ -99,7 +99,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     supabase
       .from('sends')
       .select(
-        'id, subject_rendered, status, sent_at, opened_at, replied_at, bounced_at, reply_classification, created_at, contacts(first_name,last_name,email), companies(id,name)',
+        'id, subject_rendered, body_rendered, status, error, resend_message_id, reply_body, sent_at, opened_at, clicked_at, replied_at, bounced_at, reply_classification, created_at, contacts(first_name,last_name,email), companies(id,name)',
       )
       .eq('campaign_id', params.id)
       .order('created_at', { ascending: false })
