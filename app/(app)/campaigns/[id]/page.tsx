@@ -8,6 +8,9 @@ import { CapabilityBadge } from '@/components/common/capability-badge';
 import { EmptyState } from '@/components/common/empty-state';
 import { EditCampaignDialog } from '@/components/campaigns/edit-campaign-dialog';
 import { AddLeadsDialog } from '@/components/campaigns/add-leads-dialog';
+import { DeleteCampaignButton } from '@/components/campaigns/delete-campaign-button';
+import { FlushQueueButton } from '@/components/campaigns/flush-queue-button';
+import { SendNowButton } from '@/components/campaigns/send-now-button';
 import { createClient } from '@/lib/supabase/server';
 import { format, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -155,6 +158,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
               daily_send_cap: c.daily_send_cap,
             }}
           />
+          <DeleteCampaignButton campaignId={c.id} campaignName={c.name} />
         </div>
       </div>
 
@@ -223,6 +227,9 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
               {filteredRows.length} of {sendRows.length} sends
             </p>
           </div>
+          {(activeFilter === 'queued' || activeFilter === 'all') && counts.queued > 0 && (
+            <FlushQueueButton campaignId={c.id} queuedCount={counts.queued} />
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {filteredRows.length === 0 ? (
@@ -246,6 +253,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                   <TableHead>Status</TableHead>
                   <TableHead>Reply</TableHead>
                   <TableHead>When</TableHead>
+                  <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -283,6 +291,9 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                       {s.sent_at
                         ? formatDistanceToNow(new Date(s.sent_at), { addSuffix: true })
                         : formatDistanceToNow(new Date(s.created_at), { addSuffix: true })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {s.status === 'queued' && <SendNowButton sendId={s.id} />}
                     </TableCell>
                   </TableRow>
                 ))}

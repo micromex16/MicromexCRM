@@ -44,11 +44,11 @@ export async function DELETE(_request: NextRequest, ctx: { params: { id: string 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  // Soft delete: mark complete + paused. Keeps the sends history intact.
-  const { error } = await supabase
-    .from('campaigns')
-    .update({ status: 'complete' } as never)
-    .eq('id', ctx.params.id);
+  // Hard delete the campaign row. The sends table has
+  //   campaign_id uuid references campaigns(id) on delete set null
+  // so historical sends are preserved with campaign_id=null — analytics
+  // and lead-level email history stay intact.
+  const { error } = await supabase.from('campaigns').delete().eq('id', ctx.params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
