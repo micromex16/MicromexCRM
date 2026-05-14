@@ -56,6 +56,7 @@ interface SendRow {
 
 const FILTERS = [
   { key: 'all', label: 'All', match: (_s: SendRow) => true },
+  { key: 'drafting', label: 'Drafting', match: (_s: SendRow) => false }, // virtual: from enrichment_jobs
   {
     key: 'queued',
     label: 'Queued',
@@ -87,7 +88,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
   if (!campaign) notFound();
   const c = campaign as unknown as CampaignRow;
 
-  const [sendsRes, pendingDraftsRes] = await Promise.all([
+  const [sendsRes, pendingJobsRes] = await Promise.all([
     supabase
       .from('sends')
       .select(
@@ -98,27 +99,102 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
       .limit(500),
     supabase
       .from('enrichment_jobs')
-      .select('id', { count: 'exact', head: true })
+      .select('id, target_id, created_at, attempts, error')
       .eq('job_type', 'draft_email')
       .eq('status', 'pending')
-      .filter('metadata_json->>campaign_id', 'eq', params.id),
+      .filter('metadata_json->>campaign_id', 'eq', params.id)
+      .order('created_at', { ascending: false })
+      .limit(500),
   ]);
   const sends = sendsRes.data;
-  const pendingDrafts = pendingDraftsRes.count ?? 0;
+  const pendingJobs = (pendingJobsRes.data ?? []) as Array<{
+    id: string;
+    target_id: string;
+    created_at: string;
+    attempts: number;
+    error: string | null;
+  }>;
+  const pendingDrafts = pendingJobs.length;
+
+  // Resolve contact + company info for the pending drafts so we can show
+  // a real row per pending lead (not just a count).
+  let pendingRows: Array<{
+    id: string;
+    contact_id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    company_id: string | null;
+    company_name: string | null;
+    created_at: string;
+    attempts: number;
+    error: string | null;
+  }> = [];
+  if (pendingJobs.length > 0) {
+    const contactIds = Array.from(new Set(pendingJobs.map((j) => j.target_id)));
+    const { data: pendingContacts } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name, email, company_id, companies(id, name)')
+      .in('id', contactIds);
+    const cMap = new Map<string, {
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      company_id: string | null;
+      company_name: string | null;
+    }>();
+    for (const ct of (pendingContacts ?? []) as Array<{
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      company_id: string | null;
+      companies: { id: string; name: string } | null;
+    }>) {
+      cMap.set(ct.id, {
+        first_name: ct.first_name,
+        last_name: ct.last_name,
+        email: ct.email,
+        company_id: ct.company_id ?? ct.companies?.id ?? null,
+        company_name: ct.companies?.name ?? null,
+      });
+    }
+    pendingRows = pendingJobs.map((j) => {
+      const c = cMap.get(j.target_id);
+      return {
+        id: j.id,
+        contact_id: j.target_id,
+        first_name: c?.first_name ?? null,
+        last_name: c?.last_name ?? null,
+        email: c?.email ?? null,
+        company_id: c?.company_id ?? null,
+        company_name: c?.company_name ?? null,
+        created_at: j.created_at,
+        attempts: j.attempts,
+        error: j.error,
+      };
+    });
+  }
+
   const sendRows = (sends ?? []) as unknown as SendRow[];
 
-  // Compute live counts from the actual sends (more accurate than the
-  // totals on the campaign row, which only get incremented at certain
-  // points).
+  // Compute live counts from the actual sends + pending drafts.
   const counts = {
-    all: sendRows.length,
-    queued: sendRows.filter(FILTERS[1].match).length,
-    sent: sendRows.filter(FILTERS[2].match).length,
-    opened: sendRows.filter(FILTERS[3].match).length,
-    replied: sendRows.filter(FILTERS[4].match).length,
-    bounced: sendRows.filter(FILTERS[5].match).length,
-    failed: sendRows.filter(FILTERS[6].match).length,
-    unsubscribed: sendRows.filter(FILTERS[7].match).length,
+    all: sendRows.length + pendingDrafts,
+    drafting: pendingDrafts,
+    queued: sendRows.filter((s) => s.status === 'queued' || s.status === 'manual_hold').length,
+    sent: sendRows.filter(
+      (s) =>
+        s.status === 'sent' ||
+        s.status === 'opened' ||
+        s.status === 'clicked' ||
+        Boolean(s.sent_at),
+    ).length,
+    opened: sendRows.filter((s) => Boolean(s.opened_at)).length,
+    replied: sendRows.filter((s) => Boolean(s.replied_at) || s.status === 'replied').length,
+    bounced: sendRows.filter((s) => Boolean(s.bounced_at) || s.status === 'bounced').length,
+    failed: sendRows.filter((s) => s.status === 'failed').length,
+    unsubscribed: sendRows.filter((s) => s.status === 'unsubscribed').length,
   };
 
   const sent = counts.sent;
@@ -236,10 +312,14 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
           <div>
             <CardTitle>
-              {activeFilter === 'all' ? 'Send queue & history' : FILTERS.find((f) => f.key === activeFilter)?.label}
+              {activeFilter === 'all'
+                ? 'Send queue & history'
+                : FILTERS.find((f) => f.key === activeFilter)?.label}
             </CardTitle>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {filteredRows.length} of {sendRows.length} sends
+              {activeFilter === 'drafting'
+                ? `${pendingRows.length} pending drafts`
+                : `${filteredRows.length} of ${sendRows.length} sends`}
             </p>
           </div>
           {(activeFilter === 'queued' || activeFilter === 'all') && counts.queued > 0 && (
@@ -247,14 +327,82 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           )}
         </CardHeader>
         <CardContent className="p-0">
-          {filteredRows.length === 0 ? (
+          {activeFilter === 'drafting' ? (
+            // Special view: render pending draft_email jobs from enrichment_jobs
+            pendingRows.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  icon={Clock}
+                  title="No drafts pending"
+                  description="When you add leads, they appear here while Claude is still drafting them."
+                />
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>To</TableHead>
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Attempts</TableHead>
+                    <TableHead>Queued</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingRows.map((p) => (
+                    <TableRow key={p.id} className="opacity-90">
+                      <TableCell className="font-medium">
+                        <div>
+                          {[p.first_name, p.last_name].filter(Boolean).join(' ') || '(no name)'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {p.company_id && p.company_name ? (
+                            <Link
+                              href={`/leads/${p.company_id}`}
+                              className="hover:text-mx-600 hover:underline"
+                            >
+                              {p.company_name}
+                            </Link>
+                          ) : (
+                            p.company_name ?? '—'
+                          )}
+                          {p.email && ` · ${p.email}`}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm italic text-muted-foreground">
+                        not drafted yet
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs capitalize text-amber-700">drafting…</span>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {p.attempts > 0 ? `${p.attempts} attempt${p.attempts === 1 ? '' : 's'}` : '—'}
+                        {p.error && (
+                          <div className="text-[10px] text-destructive">
+                            err: {p.error.slice(0, 40)}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}
+                      </TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          ) : filteredRows.length === 0 ? (
             <div className="p-6">
               <EmptyState
                 icon={activeFilter === 'all' ? Send : activeFilter === 'replied' ? MessageCircle : activeFilter === 'unsubscribed' ? ShieldOff : Clock}
                 title={activeFilter === 'all' ? 'No sends yet' : `No ${activeFilter} sends`}
                 description={
                   activeFilter === 'all'
-                    ? 'Add leads to this campaign to queue drafts. Use the Add leads button above.'
+                    ? pendingDrafts > 0
+                      ? `${pendingDrafts} drafts are still being generated — see the banner above to process them now.`
+                      : 'Add leads to this campaign to queue drafts. Use the Add leads button above.'
                     : 'Try a different filter, or add more leads.'
                 }
               />
