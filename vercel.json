@@ -8,6 +8,7 @@
     { "path": "/api/cron/run-enrichment", "schedule": "0 12 * * *" },
     { "path": "/api/cron/score-leads", "schedule": "0 13 * * *" },
     { "path": "/api/cron/send-batch", "schedule": "0 14 * * 1-5" },
+    { "path": "/api/cron/followups", "schedule": "30 15 * * 1-5" },
     { "path": "/api/cron/digest-daily", "schedule": "0 22 * * 1-5" }
   ],
   "functions": {

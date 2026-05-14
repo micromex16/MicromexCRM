@@ -173,4 +173,98 @@ hardware kits — for 38 years. USMCA-qualifying.
 
 Giovanni`,
   },
+
+  // ===== Follow-ups (one per capability, variant 'FU') =====
+  // These are sent automatically 2 days after the first email if no reply,
+  // bounce, or unsubscribe came in. Each one leads with the 40-50% labor
+  // savings number and gives more Micromex specifics.
+  {
+    name: 'electrical_followup',
+    capability_bucket: 'electrical',
+    variant_label: 'FU',
+    subject: 'quick follow-up — labor math',
+    body_md: `Hi {{contact.first_name}} —
+
+Following up on my note from earlier this week. The number I should have
+led with: we typically take 40–50% off the labor portion of sub-assembly
+work when brands move from Asia to our Sonora facility.
+
+More specifics on Micromex if it's useful:
+- ISO 9001:2015 + IMMEX-registered; 38 years running harness, cord-set,
+  and wound-magnetics work
+- ~250-person production floor with bilingual engineering and program
+  management — US-based PM contacts out of Tucson
+- Same-day truck Tucson → Phoenix vs. ~45 days from China
+- BOM data under NDA — we can quote real numbers on your actual SKU
+
+Worth 20 minutes to put real numbers on a specific assembly?`,
+  },
+  {
+    name: 'refurb_followup',
+    capability_bucket: 'refurb',
+    variant_label: 'FU',
+    subject: 'quick follow-up — refurb math',
+    body_md: `Hi {{contact.first_name}} —
+
+Following up on my note about the refurb pipeline. The math I should have
+spelled out: we typically take 40–50% off the labor portion of premium-
+hardware repair and refurbishment vs. doing it stateside, and brands
+recover 40–60% of unit cost on returned product (vs. scrap or B-stock).
+
+More on Micromex:
+- Full repair line — inbound diagnostic, component-level repair, repack,
+  drop-ship to your end customers
+- ISO 9001:2015; 38 years of manufacturing + repair-line experience
+- Reference customer: Terra Kaffe (premium home espresso)
+- Bilingual technicians, US-based PM contacts out of Tucson HQ
+
+Worth 20 minutes to walk through the unit economics on your return volume?`,
+  },
+  {
+    name: 'packaging_followup',
+    capability_bucket: 'packaging',
+    variant_label: 'FU',
+    subject: 'quick follow-up — packaging labor math',
+    body_md: `Hi {{contact.first_name}} —
+
+Following up on my note about contract packaging. The labor number for
+context: we typically take 40–50% off the hand-pack / kitting /
+retail-ready conversion step when brands move that work from Asia to our
+Sonora facility.
+
+More on Micromex if it helps:
+- 38 years of manufacturing + packaging history; ~250-person production
+  floor with experience on toys, novelty CPG, gift sets, multi-component
+  kits, and temporary tattoos
+- ISO 9001:2015 + IMMEX-registered; USMCA-qualifying on the packaging
+  step (no duty exposure on the conversion)
+- Hand-pack at scale, bilingual program management, US PM contacts out
+  of Tucson HQ
+
+20 minutes to compare landed cost on a real SKU?`,
+  },
+  {
+    name: 'mechanical_followup',
+    capability_bucket: 'mechanical',
+    variant_label: 'FU',
+    subject: 'quick follow-up — labor savings math',
+    body_md: `Hi {{contact.first_name}} —
+
+Following up on my note about mechanical sub-assembly. The number I
+should have led with: we typically take 40–50% off the labor portion
+of labor-heavy mechanical work when brands move from Asia to our
+Sonora facility.
+
+More on Micromex:
+- 38 years of mechanical-assembly work for US OEMs — door hardware,
+  elevator components, hardware kits, machined-part sub-assemblies,
+  fixtures
+- ISO 9001:2015 + IMMEX-registered; ~250-person production floor with
+  bilingual engineering and program management
+- Same-day truck Tucson → Phoenix; ~3 days anywhere in the continental US
+- BOM data under NDA — we can quote real numbers on your specific
+  assembly
+
+20 minutes to put real numbers on a specific BOM?`,
+  },
 ];
