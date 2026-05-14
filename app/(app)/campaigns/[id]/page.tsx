@@ -11,6 +11,7 @@ import { AddLeadsDialog } from '@/components/campaigns/add-leads-dialog';
 import { DeleteCampaignButton } from '@/components/campaigns/delete-campaign-button';
 import { FlushQueueButton } from '@/components/campaigns/flush-queue-button';
 import { SendNowButton } from '@/components/campaigns/send-now-button';
+import { ProcessDraftsButton } from '@/components/campaigns/process-drafts-button';
 import { createClient } from '@/lib/supabase/server';
 import { format, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -86,14 +87,24 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
   if (!campaign) notFound();
   const c = campaign as unknown as CampaignRow;
 
-  const { data: sends } = await supabase
-    .from('sends')
-    .select(
-      'id, subject_rendered, status, sent_at, opened_at, replied_at, bounced_at, reply_classification, created_at, contacts(first_name,last_name,email), companies(id,name)',
-    )
-    .eq('campaign_id', params.id)
-    .order('created_at', { ascending: false })
-    .limit(500);
+  const [sendsRes, pendingDraftsRes] = await Promise.all([
+    supabase
+      .from('sends')
+      .select(
+        'id, subject_rendered, status, sent_at, opened_at, replied_at, bounced_at, reply_classification, created_at, contacts(first_name,last_name,email), companies(id,name)',
+      )
+      .eq('campaign_id', params.id)
+      .order('created_at', { ascending: false })
+      .limit(500),
+    supabase
+      .from('enrichment_jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('job_type', 'draft_email')
+      .eq('status', 'pending')
+      .filter('metadata_json->>campaign_id', 'eq', params.id),
+  ]);
+  const sends = sendsRes.data;
+  const pendingDrafts = pendingDraftsRes.count ?? 0;
   const sendRows = (sends ?? []) as unknown as SendRow[];
 
   // Compute live counts from the actual sends (more accurate than the
@@ -161,6 +172,10 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           <DeleteCampaignButton campaignId={c.id} campaignName={c.name} />
         </div>
       </div>
+
+      {/* Pending drafts banner — appears when there's a draft_email job
+          queue backed up. Click to drain inline. */}
+      <ProcessDraftsButton campaignId={c.id} pendingCount={pendingDrafts} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <FilterStatCard
