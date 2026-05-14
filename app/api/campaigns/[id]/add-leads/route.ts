@@ -32,8 +32,13 @@ export async function GET(request: NextRequest, ctx: { params: { id: string } })
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  const q = new URL(request.url).searchParams.get('q')?.trim() ?? '';
-  const min = parseInt(new URL(request.url).searchParams.get('min') ?? '0', 10) || 0;
+  const params = new URL(request.url).searchParams;
+  const q = params.get('q')?.trim() ?? '';
+  const min = parseInt(params.get('min') ?? '0', 10) || 0;
+  // Optional override — by default we restrict to the campaign's bucket. Caller
+  // can pass ?capability=electrical to peek at other buckets, but the UI
+  // discourages this since the template won't match.
+  const requestedCapability = params.get('capability') as CapabilityBucket | null;
 
   const { data: campaign } = await supabase
     .from('campaigns')
@@ -41,7 +46,8 @@ export async function GET(request: NextRequest, ctx: { params: { id: string } })
     .eq('id', ctx.params.id)
     .single();
   if (!campaign) return NextResponse.json({ error: 'campaign_not_found' }, { status: 404 });
-  const bucket = (campaign as { capability_bucket: CapabilityBucket }).capability_bucket;
+  const campaignBucket = (campaign as { capability_bucket: CapabilityBucket }).capability_bucket;
+  const bucket: CapabilityBucket = requestedCapability ?? campaignBucket;
 
   // Companies that already have sends in this campaign
   const { data: existingSends } = await supabase
@@ -91,7 +97,29 @@ export async function GET(request: NextRequest, ctx: { params: { id: string } })
     };
   });
 
-  return NextResponse.json({ companies, capability_bucket: bucket });
+  // Bucket counts across all capabilities (for the tab badges)
+  const { data: bucketCountRows } = await supabase
+    .from('companies')
+    .select('capability_match, status')
+    .not('status', 'in', '(disqualified,closed_lost,closed_won)');
+  const bucketCounts: Record<string, number> = {
+    electrical: 0,
+    refurb: 0,
+    packaging: 0,
+    mechanical: 0,
+  };
+  for (const r of (bucketCountRows ?? []) as Array<{ capability_match: string[] | null }>) {
+    for (const cap of r.capability_match ?? []) {
+      if (cap in bucketCounts) bucketCounts[cap]++;
+    }
+  }
+
+  return NextResponse.json({
+    companies,
+    capability_bucket: bucket,
+    campaign_capability: campaignBucket,
+    bucket_counts: bucketCounts,
+  });
 }
 
 /**
