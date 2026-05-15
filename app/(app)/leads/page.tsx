@@ -9,6 +9,7 @@ import { StatusBadge } from '@/components/common/status-badge';
 import { EmptyState } from '@/components/common/empty-state';
 import { LeadFilters } from '@/components/leads/filters';
 import { BulkEnrichButton } from '@/components/leads/bulk-enrich-button';
+import { AddLeadDialog } from '@/components/leads/add-lead-dialog';
 import { createClient } from '@/lib/supabase/server';
 import type { CapabilityBucket, LeadStatus } from '@/lib/types/domain';
 
@@ -56,8 +57,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
         </div>
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <BulkEnrichButton />
+          <AddLeadDialog />
           <Button asChild>
-            <Link href="/sources">Add leads</Link>
+            <Link href="/sources">Import CSV</Link>
           </Button>
         </div>
       </div>
